@@ -8,12 +8,12 @@ This plan details the implementation in sequential, verifiable steps using **SQL
 ## Phase 1: Project Setup & Health Check
 **Goal**: Scaffold backend and frontend with clean TypeScript configuration and verify communication.
 
-- [ ] Initialize root monorepo `package.json` with scripts (`dev:backend`, `dev:frontend`, `build`).
-- [ ] Setup `backend`:
-  - Express, TypeScript (`ts-node-dev`), `cors`, `dotenv`.
+- [x] Initialize root monorepo `package.json` with scripts (`dev:backend`, `dev:frontend`, `build`).
+- [x] Setup `backend`:
+  - Express, TypeScript (`tsx`), `cors`, `dotenv`.
   - Structured logging middleware (`request-logger.ts`) and centralized error handler (`error-handler.ts`).
   - Health route: `GET /health` returning `{ "status": "ok" }`.
-- [ ] Setup `frontend`:
+- [x] Setup `frontend`:
   - Vite + React + TypeScript + Tailwind CSS.
   - Basic page structure with title, status indicator, and layout containers.
 - **Verification**:

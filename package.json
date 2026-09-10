@@ -1,0 +1,13 @@
+{
+  "name": "ai-knowledge-inbox-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal AI Knowledge Inbox - Full Stack Assignment",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "npm run build:backend && npm run build:frontend"
+  }
+}

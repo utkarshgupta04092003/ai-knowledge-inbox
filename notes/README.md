@@ -12,3 +12,5 @@ Comprehensive, concise engineering documentation and implementation planning for
    - Fixed-size chunking logic, cosine similarity algorithm, system prompt template, citation data model.
 4. [04 - Tradeoffs & Scaling Analysis](./04-tradeoffs-and-scale.md)
    - Architectural tradeoffs, $O(N)$ vector scan limitations, SSRF defenses, and interview talking points.
+5. [05 - Design System](./05-design-system.md)
+   - Shared visual tokens, component patterns, responsive behavior, and accessibility rules.
