@@ -4,7 +4,7 @@ import {
   Cpu,
   Edit2,
   Loader2,
-  MessageSquare,
+  Menu,
   Sparkles,
   User,
 } from "lucide-react";
@@ -286,6 +286,7 @@ export function RagQueryPanel({
         onNewChat={() => void handleNewChat()}
         onRenameSession={handleRenameSession}
         onDeleteSession={handleDeleteSession}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
       <main className="chat-main">
@@ -293,11 +294,12 @@ export function RagQueryPanel({
           <div className="chat-header-title-wrap">
             <button
               type="button"
-              className="mobile-session-toggle"
-              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+              className="chat-hamburger-btn"
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label="Open chat history"
+              title="Chat history"
             >
-              <MessageSquare size={14} />
-              Chats ({sessions.length})
+              <Menu size={18} />
             </button>
             <h2 className="chat-header-title" title={sessionDetail?.title}>
               {sessionDetail?.title ?? "Conversation"}

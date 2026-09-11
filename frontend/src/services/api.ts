@@ -21,7 +21,7 @@ export type {
   Item,
   RagResponse,
   SourceCitation,
-  SourceType
+  SourceType,
 };
 
 interface ApiErrorResponse {
@@ -74,7 +74,11 @@ export async function ingestItem(
 
 export interface StreamQueryCallbacks {
   onSessionId?: (sessionId: string) => void;
-  onStatus?: (status: { stage: string; message: string; iteration?: number }) => void;
+  onStatus?: (status: {
+    stage: string;
+    message: string;
+    iteration?: number;
+  }) => void;
   onSources?: (sources: SourceCitation[]) => void;
   onDelta?: (delta: string) => void;
   onDone?: (result: RagResponse) => void;
@@ -131,7 +135,45 @@ export async function askQueryStream(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let currentEvent = "";
   let finalResult: RagResponse | null = null;
+
+  const processLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      currentEvent = "";
+      return;
+    }
+
+    if (trimmed.startsWith("event:")) {
+      currentEvent = trimmed.slice(6).trim();
+    } else if (trimmed.startsWith("data:")) {
+      const rawData = trimmed.slice(5).trim();
+      try {
+        const data = JSON.parse(rawData);
+        if (currentEvent === "session" && data.sessionId) {
+          callbacks?.onSessionId?.(data.sessionId);
+        } else if (currentEvent === "status") {
+          callbacks?.onStatus?.(data);
+        } else if (currentEvent === "sources" && Array.isArray(data.sources)) {
+          callbacks?.onSources?.(data.sources);
+        } else if (currentEvent === "delta" && typeof data.delta === "string") {
+          callbacks?.onDelta?.(data.delta);
+        } else if (currentEvent === "done") {
+          finalResult = data as RagResponse;
+          callbacks?.onDone?.(finalResult);
+        } else if (currentEvent === "error") {
+          const err = new Error(data.message || "Query stream failed.");
+          callbacks?.onError?.(err);
+          throw err;
+        }
+      } catch (jsonErr) {
+        if (jsonErr instanceof Error && currentEvent === "error") {
+          throw jsonErr;
+        }
+      }
+    }
+  };
 
   try {
     while (true) {
@@ -142,39 +184,16 @@ export async function askQueryStream(
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 
-      let currentEvent = "";
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+        processLine(line);
+      }
+    }
 
-        if (trimmed.startsWith("event:")) {
-          currentEvent = trimmed.slice(6).trim();
-        } else if (trimmed.startsWith("data:")) {
-          const rawData = trimmed.slice(5).trim();
-          try {
-            const data = JSON.parse(rawData);
-            if (currentEvent === "session" && data.sessionId) {
-              callbacks?.onSessionId?.(data.sessionId);
-            } else if (currentEvent === "status") {
-              callbacks?.onStatus?.(data);
-            } else if (currentEvent === "sources" && Array.isArray(data.sources)) {
-              callbacks?.onSources?.(data.sources);
-            } else if (currentEvent === "delta" && typeof data.delta === "string") {
-              callbacks?.onDelta?.(data.delta);
-            } else if (currentEvent === "done") {
-              finalResult = data as RagResponse;
-              callbacks?.onDone?.(finalResult);
-            } else if (currentEvent === "error") {
-              const err = new Error(data.message || "Query stream failed.");
-              callbacks?.onError?.(err);
-              throw err;
-            }
-          } catch (jsonErr) {
-            if (jsonErr instanceof Error && currentEvent === "error") {
-              throw jsonErr;
-            }
-          }
-        }
+    buffer += decoder.decode();
+    if (buffer) {
+      const remainingLines = buffer.split("\n");
+      for (const line of remainingLines) {
+        processLine(line);
       }
     }
   } finally {
@@ -256,4 +275,3 @@ export async function deleteItem(id: string): Promise<void> {
   });
   await handleResponse<{ success: boolean; message: string }>(res);
 }
-

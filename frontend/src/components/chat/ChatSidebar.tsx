@@ -19,6 +19,7 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   onRenameSession: (id: string, newTitle: string) => Promise<void>;
   onDeleteSession: (id: string, e: React.MouseEvent) => Promise<void>;
+  onCloseMobile?: () => void;
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({
@@ -30,6 +31,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onNewChat,
   onRenameSession,
   onDeleteSession,
+  onCloseMobile,
 }) => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitleInput, setEditTitleInput] = useState("");
@@ -54,22 +56,46 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   };
 
   return (
-    <aside className={`chat-sidebar ${mobileSidebarOpen ? "mobile-open" : ""}`}>
-      <div className="chat-sidebar-header">
-        <div className="chat-sidebar-title">
-          <MessageSquare size={16} color="var(--primary)" />
-          <span>Conversations</span>
+    <>
+      {mobileSidebarOpen && (
+        <div
+          className="chat-sidebar-backdrop"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+      <aside className={`chat-sidebar ${mobileSidebarOpen ? "mobile-open" : ""}`}>
+        <div className="chat-sidebar-header">
+          <div className="chat-sidebar-title">
+            <MessageSquare size={16} color="var(--primary)" />
+            <span>Conversations</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <button
+              type="button"
+              className="new-chat-btn"
+              onClick={() => {
+                onNewChat();
+                if (onCloseMobile) onCloseMobile();
+              }}
+              title="Start new conversation"
+            >
+              <Plus size={14} />
+              New
+            </button>
+            {onCloseMobile && (
+              <button
+                type="button"
+                className="mobile-sidebar-close"
+                onClick={onCloseMobile}
+                title="Close chat history"
+                aria-label="Close chat history"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
-        <button
-          type="button"
-          className="new-chat-btn"
-          onClick={onNewChat}
-          title="Start new conversation"
-        >
-          <Plus size={14} />
-          New
-        </button>
-      </div>
 
       <div className="session-list">
         {loadingSessions && sessions.length === 0 ? (
@@ -186,5 +212,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         )}
       </div>
     </aside>
+    </>
   );
 };

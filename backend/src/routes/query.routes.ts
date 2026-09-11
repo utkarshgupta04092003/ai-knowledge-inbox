@@ -95,67 +95,83 @@ export function createQueryRouter(
             res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
           };
 
-          sendEvent("session", { sessionId });
+          try {
+            sendEvent("session", { sessionId });
 
-          logger.info("http_query_stream_received", {
-            question: trimmedQuestion,
-            sessionId,
-          });
+            logger.info("http_query_stream_received", {
+              question: trimmedQuestion,
+              sessionId,
+            });
 
-          const result = ragService.answerQuestionStream
-            ? await ragService.answerQuestionStream(
-                trimmedQuestion,
-                {
-                  onStatus: (status) => sendEvent("status", status),
-                  onSources: (sources) => sendEvent("sources", { sources }),
-                  onToken: (token) => sendEvent("delta", { delta: token }),
-                },
-                history,
-              )
-            : await ragService.answerQuestion(trimmedQuestion, history);
+            const result = ragService.answerQuestionStream
+              ? await ragService.answerQuestionStream(
+                  trimmedQuestion,
+                  {
+                    onStatus: (status) => sendEvent("status", status),
+                    onSources: (sources) => sendEvent("sources", { sources }),
+                    onToken: (token) => sendEvent("delta", { delta: token }),
+                  },
+                  history,
+                )
+              : await ragService.answerQuestion(trimmedQuestion, history);
 
-          const enc = getTokenizer();
-          const historyTokens = history.reduce(
-            (sum, turn) =>
-              sum +
-              enc.encode(turn.question).length +
-              enc.encode(turn.answer).length,
-            0,
-          );
-          const promptTokens =
-            enc.encode(trimmedQuestion).length + historyTokens;
-          const completionTokens = enc.encode(result.answer).length;
-          const totalTokens = promptTokens + completionTokens;
+            const enc = getTokenizer();
+            const historyTokens = history.reduce(
+              (sum, turn) =>
+                sum +
+                enc.encode(turn.question).length +
+                enc.encode(turn.answer).length,
+              0,
+            );
+            const promptTokens =
+              enc.encode(trimmedQuestion).length + historyTokens;
+            const completionTokens = enc.encode(result.answer).length;
+            const totalTokens = promptTokens + completionTokens;
 
-          const turn = await sessionService.addTurn(sessionId, {
-            question: trimmedQuestion,
-            answer: result.answer,
-            sources: result.sources,
-            iterations: result.iterations,
-            isFallback: result.isFallback,
-            promptTokens,
-            completionTokens,
-            totalTokens,
-          });
+            const turn = await sessionService.addTurn(sessionId, {
+              question: trimmedQuestion,
+              answer: result.answer,
+              sources: result.sources,
+              iterations: result.iterations,
+              isFallback: result.isFallback,
+              promptTokens,
+              completionTokens,
+              totalTokens,
+            });
 
-          logger.info("http_query_stream_completed", {
-            question: trimmedQuestion,
-            sessionId,
-            turnId: turn.id,
-            promptTokens,
-            completionTokens,
-          });
+            logger.info("http_query_stream_completed", {
+              question: trimmedQuestion,
+              sessionId,
+              turnId: turn.id,
+              promptTokens,
+              completionTokens,
+            });
 
-          sendEvent("done", {
-            ...result,
-            sessionId,
-            turnId: turn.id,
-            promptTokens,
-            completionTokens,
-            totalTokens,
-          });
-
-          res.end();
+            sendEvent("done", {
+              ...result,
+              sessionId,
+              turnId: turn.id,
+              promptTokens,
+              completionTokens,
+              totalTokens,
+            });
+          } catch (streamError) {
+            logger.error("http_query_stream_error", {
+              error:
+                streamError instanceof Error
+                  ? streamError.message
+                  : String(streamError),
+              sessionId,
+            });
+            sendEvent("error", {
+              message:
+                streamError instanceof Error
+                  ? streamError.message
+                  : "Streaming response generation failed.",
+            });
+          } finally {
+            res.end();
+          }
           return;
         }
 
