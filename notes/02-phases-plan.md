@@ -1,7 +1,7 @@
 # AI Knowledge Inbox - Phased Implementation Plan
 
 ## Overview
-This plan details the implementation in sequential, verifiable steps using **SQLite** for document metadata/text and **Pinecone** for vector indexing and semantic retrieval.
+This plan details the implementation in sequential, verifiable steps using **Prisma ORM with SQLite** for document metadata/text and **Pinecone** for vector indexing and semantic retrieval.
 
 ---
 
@@ -23,20 +23,26 @@ This plan details the implementation in sequential, verifiable steps using **SQL
 ---
 
 ## Phase 2: Database Layer & Pinecone Client
-**Goal**: Setup SQLite schema and initialize Pinecone vector client.
+**Goal**: Set up Prisma ORM with SQLite and initialize the Pinecone vector client.
 
-- [ ] SQLite setup (`better-sqlite3`):
-  - Implement `db/database.ts` (connection singleton).
-  - Implement `db/migrations.ts` for `items` and `chunks` tables.
-  - Implement `ItemRepository` (create, findAll, findById).
-  - Implement `ChunkRepository` (bulk insert, delete by item).
-- [ ] Pinecone client initialization (`ai/pinecone.client.ts`):
+- [x] Prisma ORM with SQLite:
+  - [x] Add `prisma/schema.prisma` with `Item` model (zero data redundancy; chunks stored in Pinecone).
+  - [x] Add `prisma.config.ts` and configure `DATABASE_URL`.
+  - [x] Use `@prisma/adapter-better-sqlite3` for the local SQLite connection.
+  - [x] Generate Prisma Client into `src/generated/prisma`.
+  - [x] Create and apply the initial Prisma migration.
+  - [x] Implement a shared `db/prisma.ts` client lifecycle module.
+  - [x] Implement Prisma-backed `ItemService` module (`services/item.service.ts`).
+  - [x] Remove the superseded manual database and migration modules.
+- [x] Pinecone client initialization (`services/pinecone.service.ts`):
   - Instantiate `Pinecone` client using `PINECONE_API_KEY`.
   - Export index reference (`PINECONE_INDEX`).
   - Add connection verification check.
 - **Verification**:
-  - Migration script creates SQLite tables.
-  - Test script verifies Pinecone index connectivity and describes index stats.
+  - [x] `prisma migrate dev` creates the SQLite `items` table and migration history.
+  - [x] Repository tests verify item creation, lookup, and deletion through Prisma Client.
+  - [x] Prisma Studio command is configured for database inspection.
+  - [x] Test script verifies Pinecone index connectivity and describes index stats.
 
 ---
 
@@ -53,17 +59,17 @@ This plan details the implementation in sequential, verifiable steps using **SQL
 - [ ] **Chunking Service** (`services/chunking.service.ts`):
   - Recursive hierarchical splitting (`["\n\n", "\n", ". ", " ", ""]`).
   - Target: 512 tokens (~2,048 characters) with 128 tokens (~512 characters) overlap.
-  - Returns ordered chunks with `chunkIndex`.
+  - Returns ordered in-memory chunks with `chunkIndex`.
 - [ ] **Embedding Service** (`services/embedding.service.ts`):
   - OpenAI client wrapper for `text-embedding-3-small` (1536 dimensions).
   - Batch embedding generation.
 - [ ] **Ingestion Orchestrator** (`services/ingestion.service.ts`):
   - Step 1: Validate payload.
   - Step 2: Fetch & clean text (if URL).
-  - Step 3: Insert item into SQLite.
-  - Step 4: Split text into chunks, persist to SQLite.
+  - Step 3: Insert the item in SQLite through Prisma `ItemRepository`.
+  - Step 4: Split text into in-memory chunks.
   - Step 5: Generate OpenAI embeddings for all chunks.
-  - Step 6: Upsert vector records into Pinecone with chunk metadata (`itemId`, `text`, `title`, `sourceUrl`, `sourceType`).
+  - Step 6: Upsert vector records into Pinecone with deterministic IDs (`${itemId}#${chunkIndex}`) and metadata (`itemId`, `chunkIndex`, `text`, `title`, `sourceUrl`, `sourceType`).
 - [ ] **Controllers & Routes**:
   - `POST /ingest` (returns `201 Created`).
   - `GET /items` (returns `200 OK` list without heavy bodies).

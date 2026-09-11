@@ -1,0 +1,26 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum SourceType {
+  note
+  url
+}
+
+model Item {
+  id         String     @id @default(uuid())
+  sourceType SourceType @map("source_type")
+  title      String
+  content    String
+  sourceUrl  String?    @map("source_url")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@map("items")
+}

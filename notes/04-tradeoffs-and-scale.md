@@ -4,7 +4,7 @@
 
 | Decision | Selected Approach | Production Alternative | Reason for Selection |
 |---|---|---|---|
-| **Relational DB** | SQLite (`better-sqlite3`) | PostgreSQL | Durable local store for items, text chunks, and metadata; zero infra |
+| **Relational DB** | Prisma ORM + SQLite | Prisma ORM + PostgreSQL | Type-safe queries, managed migrations, local durability, and zero external database infrastructure |
 | **Vector Store** | Pinecone Serverless | Self-hosted Qdrant / Milvus / `pgvector` | Native sub-50ms ANN search; eliminates $O(N)$ CPU vector scan in Node.js |
 | **Ingestion** | Synchronous HTTP | Background Queue (BullMQ / SQS) | Direct request-response, minimal code complexity for assignment |
 | **Chunking** | Recursive Character Chunking (`\n\n`, `\n`, `. `, ` `) | Document-specific / Markdown AST chunking | Preserves natural paragraph and sentence boundaries without heavy NLP parser dependencies |
@@ -30,7 +30,7 @@
 ## 3. What Breaks at Scale
 
 ### 1. Synchronous Ingestion Latency
-- **Bottleneck**: Network Fetch ($1-3\text{s}$) $\rightarrow$ Text Clean $\rightarrow$ OpenAI Embedding ($500-1500\text{ms}$) $\rightarrow$ Pinecone Upsert ($200-500\text{ms}$) $\rightarrow$ SQLite Write. High total latency on large pages.
+- **Bottleneck**: Network Fetch ($1-3\text{s}$) $\rightarrow$ Text Clean $\rightarrow$ OpenAI Embedding ($500-1500\text{ms}$) $\rightarrow$ Pinecone Upsert ($200-500\text{ms}$) $\rightarrow$ Prisma/SQLite Write. High total latency on large pages.
 - **Fix**: Decouple ingestion via an asynchronous queue (e.g., BullMQ with Redis). API returns `202 Accepted` immediately; workers process chunking, embedding, and upserts in the background.
 
 ### 2. Dual-Write Atomicity
@@ -45,9 +45,12 @@
 
 ## 4. Interview Talking Points
 
-1. **Why use Pinecone alongside SQLite?**
-   * *Answer*: "SQLite provides local relational integrity, cascade deletes, and durable auditability for raw items, while Pinecone acts as the dedicated vector index providing $O(\log N)$ ANN retrieval and metadata filtering without loading vector arrays into Node.js memory."
+1. **Why use Pinecone alongside Prisma and SQLite?**
+   * *Answer*: "Prisma provides type-safe access to SQLite, which preserves relational integrity, cascade deletes, and durable auditability for raw items. Pinecone remains the dedicated vector index for ANN retrieval and metadata filtering without loading vector arrays into Node.js memory."
 2. **How is eventual consistency handled between SQLite and Pinecone?**
    * *Answer*: "In synchronous ingestion, we write to SQLite first, then upsert to Pinecone. In a production system at scale, we would use a transactional outbox pattern to ensure guaranteed delivery without dangling vector records."
 3. **What is the metadata limit in Pinecone?**
    * *Answer*: "Pinecone enforces a 40KB metadata limit per vector. Our chunk size of 512 tokens (~2,048 characters, ~2KB) easily sits within safety bounds while preserving the chunk text for direct retrieval without secondary database reads."
+4. **Why are chunks stored in Pinecone metadata instead of a SQLite `chunks` table?**
+   * *Answer*: "Storing chunk text in Pinecone metadata eliminates duplicate data storage between SQLite and the vector store, avoids secondary database lookups on search queries, and keeps the relational schema clean (`items` table only). Chunks are generated in memory and indexed with deterministic IDs (`${itemId}#${chunkIndex}`)."
+

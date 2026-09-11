@@ -1,7 +1,7 @@
 import express, { Application, Request, Response } from "express";
 import cors from "cors";
-import { requestLogger } from "./middleware/request-logger.js";
-import { errorHandler } from "./middleware/error-handler.js";
+import { requestLogger } from "./middleware/logger.middleware.js";
+import { errorHandler } from "./middleware/error.middleware.js";
 import healthRoutes from "./routes/health.routes.js";
 
 export function createApp(): Application {

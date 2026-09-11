@@ -5,7 +5,7 @@ Comprehensive, concise engineering documentation and implementation planning for
 ## Table of Contents
 
 1. [01 - Architecture & System Design](./01-architecture.md)
-   - Component architecture, tech stack, SQLite schema, API contracts, error envelope.
+   - Component architecture, tech stack, Prisma schema, API contracts, error envelope.
 2. [02 - Phased Implementation Plan](./02-phases-plan.md)
    - 6 sequential phases with discrete deliverables and verification checkpoints.
 3. [03 - RAG & Retrieval Design](./03-rag-and-retrieval.md)

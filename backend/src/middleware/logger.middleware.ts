@@ -11,9 +11,9 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
       method: req.method,
       url: req.originalUrl || req.url,
       statusCode: res.statusCode,
-      durationMs
+      durationMs,
     };
-    process.stdout.write(JSON.stringify(logEntry) + "\n");
+    process.stdout.write(`${JSON.stringify(logEntry)}\n`);
   });
 
   next();

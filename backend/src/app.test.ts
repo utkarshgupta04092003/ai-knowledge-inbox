@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import request from "supertest";
 import express from "express";
 import { createApp } from "./app.js";
-import { AppError, errorHandler } from "./middleware/error-handler.js";
+import { AppError, errorHandler } from "./middleware/error.middleware.js";
 
 describe("Phase 1 - Backend Core & Health Suite", () => {
   const app = createApp();

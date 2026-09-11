@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 
 export type HealthStatus = "checking" | "connected" | "error";
 
+async function measureHealthLatency(signal?: AbortSignal): Promise<number> {
+  const startedAt = performance.now();
+  const response = await fetch("/health", { signal });
+  if (!response.ok) throw new Error("Health check failed");
+  return Math.round(performance.now() - startedAt);
+}
+
 export function useHealthStatus() {
   const [status, setStatus] = useState<HealthStatus>("checking");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
@@ -9,13 +16,9 @@ export function useHealthStatus() {
   const checkHealth = useCallback(async () => {
     setStatus("checking");
     setLatencyMs(null);
-    const startedAt = performance.now();
 
     try {
-      const response = await fetch("/health");
-      if (!response.ok) throw new Error("Health check failed");
-
-      setLatencyMs(Math.round(performance.now() - startedAt));
+      setLatencyMs(await measureHealthLatency());
       setStatus("connected");
     } catch {
       setStatus("error");
@@ -23,8 +26,20 @@ export function useHealthStatus() {
   }, []);
 
   useEffect(() => {
-    void checkHealth();
-  }, [checkHealth]);
+    const controller = new AbortController();
+
+    measureHealthLatency(controller.signal)
+      .then((latency) => {
+        setLatencyMs(latency);
+        setStatus("connected");
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setStatus("error");
+      });
+
+    return () => controller.abort();
+  }, []);
 
   return { status, latencyMs, checkHealth };
 }

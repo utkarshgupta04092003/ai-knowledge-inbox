@@ -29,11 +29,11 @@
          |                           |                             |
          v                           v                             |
 +-----------------+         +-----------------+                    |
-| SQLite Database |         | Pinecone Vector |                    |
-| (better-sqlite3)|         | Index (Serverless)                   |
+| Prisma + SQLite |         | Pinecone Vector |                    |
+| (local file DB) |         | Index (Serverless)                   |
 +-----------------+         +-----------------+                    |
 | - items         |         | - vectors (1536)|                    |
-| - chunks (text) |         | - chunk metadata|                    |
+|                 |         | - chunk metadata|                    |
 +-----------------+         +--------+--------+                    |
                                      |                             |
                                      +--------------+--------------+
@@ -50,8 +50,8 @@
 |---|---|---|
 | **Frontend** | React, Vite, TypeScript, Tailwind CSS | Fast dev loop, clean UI, typed client |
 | **Backend** | Node.js, Express, TypeScript | Lightweight, typed, standard REST API |
-| **Database (Relational)**| SQLite (`better-sqlite3`) | Durable local store for items, text chunks, and metadata |
-| **Vector Store** | Pinecone (`@pinecone-database/pinecone`) | Managed vector database, native ANN search, eliminates $O(N)$ scan |
+| **Database (Relational)**| Prisma ORM + SQLite (`@prisma/adapter-better-sqlite3`) | Type-safe local persistence for items, managed migrations, zero redundancy, and zero external database infrastructure |
+| **Vector Store** | Pinecone (`@pinecone-database/pinecone`) | Managed vector database, native ANN search, stores vector embeddings and chunk text as metadata |
 | **AI Provider** | OpenAI API (`text-embedding-3-small`, `gpt-4o-mini`) | 1536-dim embeddings and grounded chat completions |
 
 ---
@@ -62,37 +62,38 @@
 ai-knowledge-inbox/
 ├── backend/
 │   ├── src/
-│   │   ├── ai/
-│   │   │   ├── openai.client.ts
-│   │   │   └── pinecone.client.ts
-│   │   ├── controllers/
-│   │   │   ├── ingest.controller.ts
-│   │   │   ├── items.controller.ts
-│   │   │   └── query.controller.ts
+│   │   ├── config/
+│   │   │   └── env.ts
+│   │   ├── types/
+│   │   │   └── index.ts
 │   │   ├── db/
-│   │   │   ├── database.ts
-│   │   │   ├── migrations.ts
-│   │   │   └── repositories/
-│   │   │       ├── chunk.repository.ts
-│   │   │       └── item.repository.ts
-│   │   ├── middleware/
-│   │   │   ├── error-handler.ts
-│   │   │   └── request-logger.ts
+│   │   │   └── prisma.ts
 │   │   ├── routes/
+│   │   │   ├── health.routes.ts
 │   │   │   ├── ingest.routes.ts
 │   │   │   ├── items.routes.ts
 │   │   │   └── query.routes.ts
 │   │   ├── services/
+│   │   │   ├── item.service.ts
+│   │   │   ├── pinecone.service.ts
+│   │   │   ├── url-fetch.service.ts
 │   │   │   ├── chunking.service.ts
 │   │   │   ├── embedding.service.ts
 │   │   │   ├── ingestion.service.ts
-│   │   │   ├── rag.service.ts
 │   │   │   ├── search.service.ts
-│   │   │   └── url-fetch.service.ts
-│   │   ├── utils/
-│   │   │   └── validation.ts
+│   │   │   └── rag.service.ts
+│   │   ├── middleware/
+│   │   │   ├── error.middleware.ts
+│   │   │   └── logger.middleware.ts
+│   │   ├── scripts/
+│   │   │   ├── setup-pinecone.ts
+│   │   │   └── verify-pinecone.ts
 │   │   ├── app.ts
 │   │   └── server.ts
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   └── schema.prisma
+│   ├── prisma.config.ts
 │   ├── package.json
 │   └── tsconfig.json
 │
@@ -127,31 +128,24 @@ ai-knowledge-inbox/
 
 ## 4. Storage Schemas
 
-### SQLite: Table `items`
-```sql
-CREATE TABLE IF NOT EXISTS items (
-  id TEXT PRIMARY KEY,
-  source_type TEXT NOT NULL CHECK(source_type IN ('note', 'url')),
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  source_url TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-```
+### Prisma schema: `Item`
+```prisma
+enum SourceType {
+  note
+  url
+}
 
-### SQLite: Table `chunks`
-```sql
-CREATE TABLE IF NOT EXISTS chunks (
-  id TEXT PRIMARY KEY,
-  item_id TEXT NOT NULL,
-  content TEXT NOT NULL,
-  chunk_index INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
-);
+model Item {
+  id         String     @id @default(uuid())
+  sourceType SourceType @map("source_type")
+  title      String
+  content    String
+  sourceUrl  String?    @map("source_url")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
 
-CREATE INDEX IF NOT EXISTS idx_chunks_item_id ON chunks(item_id);
+  @@map("items")
+}
 ```
 
 ### Pinecone: Vector Record
@@ -159,7 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_chunks_item_id ON chunks(item_id);
 - **Vector Record Structure**:
 ```json
 {
-  "id": "chunk_uuid",
+  "id": "item_uuid#0",
   "values": [0.0123, -0.0456, "... (1536 floats)"],
   "metadata": {
     "itemId": "item_uuid",
@@ -258,5 +252,7 @@ PORT=5000
 OPENAI_API_KEY=sk-...
 PINECONE_API_KEY=pcsk_...
 PINECONE_INDEX=ai-knowledge-inbox
-DATABASE_PATH=./data/inbox.db
+PINECONE_CLOUD=aws
+PINECONE_REGION=us-east-1
+DATABASE_URL=file:./data/inbox-prisma.db
 ```

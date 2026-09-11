@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { env } from "../config/env.js";
 
 export class AppError extends Error {
   public readonly statusCode: number;
@@ -22,8 +23,8 @@ export function errorHandler(
     res.status(err.statusCode).json({
       error: {
         code: err.code,
-        message: err.message
-      }
+        message: err.message,
+      },
     });
     return;
   }
@@ -32,14 +33,14 @@ export function errorHandler(
     level: "error",
     event: "unhandled_error",
     message: err.message,
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined
+    stack: env.NODE_ENV === "development" ? err.stack : undefined,
   };
-  process.stderr.write(JSON.stringify(errorLog) + "\n");
+  process.stderr.write(`${JSON.stringify(errorLog)}\n`);
 
   res.status(500).json({
     error: {
       code: "INTERNAL_ERROR",
-      message: "An unexpected internal server error occurred."
-    }
+      message: "An unexpected internal server error occurred.",
+    },
   });
 }

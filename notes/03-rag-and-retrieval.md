@@ -24,16 +24,16 @@
 - **Index Type**: Serverless (AWS / GCP region)
 
 ### Upsert Payload Structure
-Each chunk is upserted with its text and origin metadata stored directly inside Pinecone:
+Each chunk generated in memory is upserted with a deterministic ID (`${itemId}#${chunkIndex}`) and its text/metadata directly into Pinecone:
 ```typescript
 await index.upsert([
   {
-    id: chunk.id,
+    id: `${item.id}#${chunk.chunkIndex}`,
     values: embeddingVector, // 1536 float array
     metadata: {
       itemId: item.id,
       chunkIndex: chunk.chunkIndex,
-      text: chunk.content,
+      text: chunk.text,
       title: item.title,
       sourceUrl: item.sourceUrl || "",
       sourceType: item.sourceType
