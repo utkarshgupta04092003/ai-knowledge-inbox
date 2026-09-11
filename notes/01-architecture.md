@@ -74,6 +74,7 @@ ai-knowledge-inbox/
 │   │   │   ├── items.routes.ts
 │   │   │   └── query.routes.ts
 │   │   ├── services/
+│   │   │   ├── ai-client.service.ts
 │   │   │   ├── item.service.ts
 │   │   │   ├── pinecone.service.ts
 │   │   │   ├── url-fetch.service.ts

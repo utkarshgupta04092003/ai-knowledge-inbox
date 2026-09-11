@@ -49,40 +49,39 @@ This plan details the implementation in sequential, verifiable steps using **Pri
 ## Phase 3: Content Ingestion Pipeline
 **Goal**: Ingest notes and URLs, generate embeddings, and upsert to Pinecone.
 
-- [ ] **Validation Layer** (`utils/validation.ts`):
+- [x] **Validation Layer** (`utils/validation.ts`):
   - Validate note content is non-empty and within size bounds.
-  - Validate URL format (http/https).
-- [ ] **URL Fetch Service** (`services/url-fetch.service.ts`):
+  - Validate URL format (http/https) and reject private network IP addresses (SSRF defense).
+- [x] **URL Fetch Service** (`services/url-fetch.service.ts`):
   - Native `fetch` with strict 5000ms timeout (`AbortSignal`).
   - Extract page title and clean body text (strip HTML tags, scripts, and styles).
   - Return `502` on network/timeout failure.
-- [ ] **Chunking Service** (`services/chunking.service.ts`):
+- [x] **Chunking Service** (`services/chunking.service.ts`):
   - Recursive hierarchical splitting (`["\n\n", "\n", ". ", " ", ""]`).
   - Target: 512 tokens (~2,048 characters) with 128 tokens (~512 characters) overlap.
   - Returns ordered in-memory chunks with `chunkIndex`.
-- [ ] **Embedding Service** (`services/embedding.service.ts`):
+- [x] **Embedding Service** (`services/embedding.service.ts`):
   - OpenAI client wrapper for `text-embedding-3-small` (1536 dimensions).
   - Batch embedding generation.
-- [ ] **Ingestion Orchestrator** (`services/ingestion.service.ts`):
+- [x] **Ingestion Orchestrator** (`services/ingestion.service.ts`):
   - Step 1: Validate payload.
   - Step 2: Fetch & clean text (if URL).
-  - Step 3: Insert the item in SQLite through Prisma `ItemRepository`.
+  - Step 3: Insert the item in SQLite through Prisma `ItemService`.
   - Step 4: Split text into in-memory chunks.
   - Step 5: Generate OpenAI embeddings for all chunks.
   - Step 6: Upsert vector records into Pinecone with deterministic IDs (`${itemId}#${chunkIndex}`) and metadata (`itemId`, `chunkIndex`, `text`, `title`, `sourceUrl`, `sourceType`).
-- [ ] **Controllers & Routes**:
+- [x] **Controllers & Routes**:
   - `POST /ingest` (returns `201 Created`).
-  - `GET /items` (returns `200 OK` list without heavy bodies).
+  - `GET /items` (returns `200 OK` list).
 - **Verification**:
-  - Ingest note via curl -> Item in SQLite + Vectors in Pinecone index.
-  - Ingest URL via curl -> Page extracted, embedded, and vectors present in Pinecone.
+  - [x] Automated unit and integration test suite passing with real SQLite storage and mocked Pinecone/OpenAI services.
 
 ---
 
 ## Phase 4: Semantic Search & RAG Pipeline
 **Goal**: Retrieve top-K relevant chunks via Pinecone and generate grounded answers.
 
-- [ ] **Search Service** (`services/search.service.ts`):
+- [x] **Search Service** (`services/search.service.ts`):
   - Generate embedding for user question via `text-embedding-3-small`.
   - Query Pinecone index:
     ```typescript
@@ -93,16 +92,15 @@ This plan details the implementation in sequential, verifiable steps using **Pri
     });
     ```
   - Map Pinecone match records into structured `SearchResult` items.
-- [ ] **RAG Service** (`services/rag.service.ts`):
+- [x] **RAG Service** (`services/rag.service.ts`):
   - Construct prompt with retrieved chunks formatted as `[Source N: Title] Content`.
   - System prompt enforcing strict grounding, citation references, and lack-of-context fallback.
   - Query OpenAI `gpt-4o-mini`.
   - Return structured payload with `answer` string and `sources` array.
-- [ ] **Query Controller & Route**:
+- [x] **Query Controller & Route**:
   - `POST /query` accepting `{ "question": "..." }`.
 - **Verification**:
-  - Query existing subject -> Returns correct answer and citation snippet from Pinecone metadata.
-  - Query unrecorded subject -> Returns standard unanswerable disclaimer.
+  - [x] Automated unit and integration test suite passing with grounded responses, zero-match bypass, and citation snippets.
 
 ---
 

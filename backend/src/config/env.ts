@@ -6,7 +6,8 @@ dotenv.config();
 const DEFAULT_DATABASE_URL = "file:./data/inbox-prisma.db";
 
 export function getDatabaseUrl(): string {
-  const configuredUrl = process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
+  const configuredUrl =
+    process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
   if (!configuredUrl.startsWith("file:")) return configuredUrl;
 
   const filePath = configuredUrl.slice("file:".length);
@@ -44,5 +45,16 @@ export const env = {
     const key = process.env.OPENAI_API_KEY?.trim();
     if (!key) throw new Error("OPENAI_API_KEY is required.");
     return key;
+  },
+  get OPENAI_BASE_URL(): string | undefined {
+    return process.env.OPENAI_BASE_URL?.trim() || undefined;
+  },
+  get OPENAI_MODEL(): string {
+    return process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  },
+  get OPENAI_EMBEDDING_MODEL(): string {
+    return (
+      process.env.OPENAI_EMBEDDING_MODEL?.trim() || "text-embedding-3-small"
+    );
   },
 };
