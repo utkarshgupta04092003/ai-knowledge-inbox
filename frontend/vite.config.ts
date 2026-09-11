@@ -32,6 +32,10 @@ export default defineConfig({
           }
         }
       },
+      "/sessions": {
+        target: "http://localhost:5000",
+        changeOrigin: true
+      },
       "/api-docs": {
         target: "http://localhost:5000",
         changeOrigin: true

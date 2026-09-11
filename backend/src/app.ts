@@ -7,11 +7,13 @@ import healthRoutes from "./routes/health.routes.js";
 import ingestRoutes from "./routes/ingest.routes.js";
 import itemsRoutes from "./routes/items.routes.js";
 import queryRoutes from "./routes/query.routes.js";
+import sessionsRoutes from "./routes/sessions.routes.js";
 
 export interface AppOptions {
   ingestRouter?: express.Router;
   itemsRouter?: express.Router;
   queryRouter?: express.Router;
+  sessionsRouter?: express.Router;
   docsRouter?: express.Router;
 }
 
@@ -27,6 +29,7 @@ export function createApp(options: AppOptions = {}): Application {
   app.use("/ingest", options.ingestRouter ?? ingestRoutes);
   app.use("/items", options.itemsRouter ?? itemsRoutes);
   app.use("/query", options.queryRouter ?? queryRoutes);
+  app.use("/sessions", options.sessionsRouter ?? sessionsRoutes);
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({

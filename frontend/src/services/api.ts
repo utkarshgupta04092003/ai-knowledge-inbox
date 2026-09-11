@@ -1,12 +1,28 @@
 import type {
+  ChatSessionDetail,
+  ChatSessionSummary,
+  ChatTurnData,
   IngestPayload,
   IngestResponse,
   IngestResult,
   Item,
   RagResponse,
+  SourceCitation,
+  SourceType,
 } from "../types/api.types.js";
 
-export type * from "../types/api.types.js";
+export type {
+  ChatSessionDetail,
+  ChatSessionSummary,
+  ChatTurnData,
+  IngestPayload,
+  IngestResponse,
+  IngestResult,
+  Item,
+  RagResponse,
+  SourceCitation,
+  SourceType,
+};
 
 interface ApiErrorResponse {
   error?: {
@@ -40,7 +56,9 @@ export async function fetchItems(): Promise<Item[]> {
   return data.items;
 }
 
-export async function ingestItem(payload: IngestPayload): Promise<IngestResult> {
+export async function ingestItem(
+  payload: IngestPayload,
+): Promise<IngestResult> {
   const res = await fetch("/ingest", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,11 +72,14 @@ export async function ingestItem(payload: IngestPayload): Promise<IngestResult> 
   };
 }
 
-export async function askQuery(question: string): Promise<RagResponse> {
+export async function askQuery(
+  question: string,
+  sessionId?: string,
+): Promise<RagResponse> {
   const res = await fetch("/query", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, sessionId }),
   });
   return handleResponse<RagResponse>(res);
 }
@@ -67,4 +88,47 @@ export async function fetchItemById(id: string): Promise<Item> {
   const res = await fetch(`/items/${encodeURIComponent(id)}`);
   const data = await handleResponse<{ item: Item }>(res);
   return data.item;
+}
+
+export async function fetchSessions(): Promise<ChatSessionSummary[]> {
+  const res = await fetch("/sessions");
+  const data = await handleResponse<{ sessions: ChatSessionSummary[] }>(res);
+  return data.sessions;
+}
+
+export async function fetchSessionById(id: string): Promise<ChatSessionDetail> {
+  const res = await fetch(`/sessions/${encodeURIComponent(id)}`);
+  return handleResponse<ChatSessionDetail>(res);
+}
+
+export async function createSession(
+  title?: string,
+): Promise<ChatSessionSummary> {
+  const res = await fetch("/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  return handleResponse<ChatSessionSummary>(res);
+}
+
+export async function updateSessionTitle(
+  id: string,
+  title: string,
+): Promise<ChatSessionSummary> {
+  const res = await fetch(`/sessions/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  return handleResponse<ChatSessionSummary>(res);
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  const res = await fetch(`/sessions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to delete session: ${res.statusText}`);
+  }
 }

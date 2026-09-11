@@ -1,23 +1,28 @@
 import {
   AlertTriangle,
-  ArrowRight,
-  BookOpen,
-  ExternalLink,
+  Bot,
+  Cpu,
+  Edit2,
   Loader2,
-  Plus,
-  Search,
-  SearchX,
+  MessageSquare,
   Sparkles,
+  User,
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { askQuery, RagResponse } from "../services/api";
-import { MarkdownRenderer } from "./MarkdownRenderer";
-
-const SAMPLE_QUERIES = [
-  "What are the main topics in my saved notes?",
-  "What is the system architecture?",
-  "Summarize the latest web articles.",
-];
+import React, { useEffect, useRef, useState } from "react";
+import {
+  askQuery,
+  createSession,
+  deleteSession,
+  fetchSessionById,
+  fetchSessions,
+  updateSessionTitle,
+  type ChatSessionDetail,
+  type ChatSessionSummary,
+  type ChatTurnData,
+} from "../services/api.js";
+import { ChatComposer } from "./chat/ChatComposer.js";
+import { ChatSidebar } from "./chat/ChatSidebar.js";
+import { ChatTurnItem } from "./chat/ChatTurnItem.js";
 
 interface RagQueryPanelProps {
   initialQuestion?: string;
@@ -28,373 +33,390 @@ export function RagQueryPanel({
   initialQuestion,
   onNavigate,
 }: RagQueryPanelProps) {
-  const [question, setQuestion] = useState(initialQuestion ?? "");
-  const [loading, setLoading] = useState(() =>
-    Boolean(initialQuestion?.trim()),
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessionDetail, setSessionDetail] = useState<ChatSessionDetail | null>(
+    null,
   );
-  const [result, setResult] = useState<RagResponse | null>(null);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loadingQuery, setLoadingQuery] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [question, setQuestion] = useState(initialQuestion ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const handleQuerySubmit = async (queryText?: string) => {
-    const targetQuery = (queryText ?? question).trim();
-    if (!targetQuery || loading) return;
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-    if (queryText) {
-      setQuestion(queryText);
-    }
-
-    setLoading(true);
-    setErrorMessage(null);
-
-    try {
-      const response = await askQuery(targetQuery);
-      setResult(response);
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Failed to execute query.",
-      );
-    } finally {
-      setLoading(false);
-    }
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
-    if (!initialQuestion?.trim()) return;
+    scrollToBottom();
+  }, [sessionDetail?.turns, loadingQuery, pendingQuestion]);
 
+  useEffect(() => {
     let ignore = false;
-    askQuery(initialQuestion.trim())
-      .then((res) => {
-        if (!ignore) {
-          setResult(res);
-          setLoading(false);
+    fetchSessions()
+      .then(async (list) => {
+        if (ignore) return;
+        if (list.length > 0) {
+          setSessions(list);
+          setActiveSessionId((prev) => prev ?? list[0].id);
+        } else {
+          const fresh = await createSession("New Conversation");
+          if (ignore) return;
+          setSessions([fresh]);
+          setActiveSessionId(fresh.id);
         }
       })
       .catch((err) => {
         if (!ignore) {
           setErrorMessage(
-            err instanceof Error ? err.message : "Failed to execute query.",
+            err instanceof Error
+              ? err.message
+              : "Failed to load chat sessions.",
           );
-          setLoading(false);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoadingSessions(false);
         }
       });
 
     return () => {
       ignore = true;
     };
-  }, [initialQuestion]);
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void handleQuerySubmit();
+  useEffect(() => {
+    if (!activeSessionId) return;
+
+    let ignore = false;
+    fetchSessionById(activeSessionId)
+      .then((detail) => {
+        if (!ignore) {
+          setSessionDetail(detail);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setErrorMessage(
+            err instanceof Error
+              ? err.message
+              : "Failed to load session details.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoadingDetail(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeSessionId]);
+
+  const handleSendQuery = async (queryText?: string) => {
+    const targetQuery = (queryText ?? question).trim();
+    if (!targetQuery || loadingQuery) return;
+
+    setQuestion("");
+    setPendingQuestion(targetQuery);
+    setLoadingQuery(true);
+    setErrorMessage(null);
+
+    const currentSessionId = activeSessionId ?? undefined;
+
+    try {
+      const response = await askQuery(targetQuery, currentSessionId);
+
+      const targetSessionId = response.sessionId ?? currentSessionId;
+      if (targetSessionId && targetSessionId !== activeSessionId) {
+        setActiveSessionId(targetSessionId);
+      }
+
+      if (targetSessionId) {
+        const freshDetail = await fetchSessionById(targetSessionId);
+        setSessionDetail(freshDetail);
+      }
+
+      const list = await fetchSessions();
+      setSessions(list);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to execute query.",
+      );
+    } finally {
+      setPendingQuestion(null);
+      setLoadingQuery(false);
     }
   };
 
-  const isFallback =
-    Boolean(result?.isFallback) ||
-    result?.answer.toLowerCase().includes("no data related to this query") ||
-    result?.answer.toLowerCase().includes("couldn't find any saved notes") ||
-    result?.answer
-      .toLowerCase()
-      .includes("no information saved in your knowledge") ||
-    result?.answer.toLowerCase().includes("don't have enough information");
+  const initialTriggered = useRef(false);
+  useEffect(() => {
+    if (
+      !initialQuestion?.trim() ||
+      initialTriggered.current ||
+      !activeSessionId
+    )
+      return;
+    initialTriggered.current = true;
+
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("q")) {
+        url.searchParams.delete("q");
+        const cleanUrl = url.pathname + (url.search ? url.search : "");
+        window.history.replaceState(null, "", cleanUrl);
+      }
+    } catch {
+      // Ignore if URL parsing fails
+    }
+
+    const timer = window.setTimeout(() => {
+      void handleSendQuery(initialQuestion.trim());
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [initialQuestion, activeSessionId]);
+
+  const handleNewChat = async () => {
+    try {
+      setErrorMessage(null);
+      const newSess = await createSession("New Conversation");
+      setSessions((prev) => [newSess, ...prev]);
+      setActiveSessionId(newSess.id);
+      setMobileSidebarOpen(false);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : "Failed to create new chat session.",
+      );
+    }
+  };
+
+  const handleRenameSession = async (id: string, newTitle: string) => {
+    try {
+      const updated = await updateSessionTitle(id, newTitle);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, title: updated.title } : s)),
+      );
+      if (sessionDetail?.id === id) {
+        setSessionDetail((prev) =>
+          prev ? { ...prev, title: updated.title } : prev,
+        );
+      }
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to rename session.",
+      );
+    }
+  };
+
+  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this conversation?")) {
+      return;
+    }
+    try {
+      await deleteSession(id);
+      const remaining = sessions.filter((s) => s.id !== id);
+      setSessions(remaining);
+      if (activeSessionId === id) {
+        if (remaining.length > 0) {
+          setActiveSessionId(remaining[0].id);
+        } else {
+          void handleNewChat();
+        }
+      }
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to delete session.",
+      );
+    }
+  };
+
+  const totalSessionTokens = sessionDetail?.turns.reduce(
+    (acc, turn) => ({
+      prompt: acc.prompt + (turn.promptTokens ?? 0),
+      completion: acc.completion + (turn.completionTokens ?? 0),
+      total: acc.total + (turn.totalTokens ?? 0),
+    }),
+    { prompt: 0, completion: 0, total: 0 },
+  ) ?? { prompt: 0, completion: 0, total: 0 };
 
   return (
-    <div className="query-section">
-      <div className="panel-card" style={{ padding: "20px" }}>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleQuerySubmit();
-          }}
-          className="query-input-container"
-        >
-          <Search size={18} className="search-icon" />
-          <input
-            type="text"
-            className="query-input"
-            placeholder="Ask anything grounded in your saved personal notes and URLs..."
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={loading}
-          />
-          <button
-            type="submit"
-            className="query-submit-btn"
-            disabled={loading || !question.trim()}
-          >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="spin" />
-                Searching...
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} />
-                Ask Inbox
-              </>
-            )}
-          </button>
-        </form>
+    <div className="chat-layout">
+      <ChatSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        loadingSessions={loadingSessions}
+        mobileSidebarOpen={mobileSidebarOpen}
+        onSelectSession={(id) => {
+          setActiveSessionId(id);
+          setMobileSidebarOpen(false);
+        }}
+        onNewChat={() => void handleNewChat()}
+        onRenameSession={handleRenameSession}
+        onDeleteSession={handleDeleteSession}
+      />
 
-        <div className="suggested-chips" style={{ marginTop: "14px" }}>
-          <span className="suggested-label">Try asking:</span>
-          {SAMPLE_QUERIES.map((sample) => (
+      <main className="chat-main">
+        <header className="chat-main-header">
+          <div className="chat-header-title-wrap">
             <button
-              key={sample}
               type="button"
-              className="chip-btn"
-              onClick={() => void handleQuerySubmit(sample)}
-              disabled={loading}
+              className="mobile-session-toggle"
+              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
             >
-              {sample}
+              <MessageSquare size={14} />
+              Chats ({sessions.length})
             </button>
-          ))}
-        </div>
-      </div>
-
-      {loading && (
-        <div className="loading-box">
-          <Loader2 size={20} className="spin" color="var(--primary-hover)" />
-          <div>
-            <strong>Self-RAG Loop Active:</strong> Retrieving Pinecone vectors,
-            grading context relevance, and verifying answer groundedness...
-          </div>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="alert alert-error">
-          <AlertTriangle size={18} />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {result && !loading && (
-        <div className="answer-box">
-          <div className="answer-header">
-            <div className="answer-header-title">
-              <Sparkles size={18} color="var(--primary-hover)" />
-              <span>Grounded Answer</span>
-            </div>
-
-            <div className="telemetry-badges">
-              <span
-                className={`telemetry-pill ${
-                  result.iterations > 1 ? "iteration-recovered" : ""
-                }`}
-                title="Number of Self-RAG loop iterations executed"
-              >
-                {result.iterations === 1
-                  ? "1 iteration (fast-path)"
-                  : `Iteration ${result.iterations}/3 (Self-RAG recovered)`}
-              </span>
-
-              {result.reformulatedQueries &&
-                result.reformulatedQueries.length > 0 && (
-                  <span
-                    className="telemetry-pill iteration-recovered"
-                    title="Alternative queries used during search reformulation"
-                  >
-                    {result.reformulatedQueries.length} reformulation
-                    {result.reformulatedQueries.length > 1 ? "s" : ""}
-                  </span>
-                )}
-            </div>
-          </div>
-
-          {result.reformulatedQueries &&
-            result.reformulatedQueries.length > 0 && (
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "var(--text-muted)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  flexWrap: "wrap",
-                  background: "var(--surface-secondary)",
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-md)",
+            <h2 className="chat-header-title" title={sessionDetail?.title}>
+              {sessionDetail?.title ?? "Conversation"}
+            </h2>
+            {sessionDetail && (
+              <button
+                type="button"
+                className="session-action-btn"
+                style={{ opacity: 1 }}
+                onClick={() => {
+                  const newTitle = window.prompt(
+                    "Enter new conversation title:",
+                    sessionDetail.title,
+                  );
+                  if (newTitle?.trim()) {
+                    void handleRenameSession(sessionDetail.id, newTitle.trim());
+                  }
                 }}
+                title="Rename conversation"
               >
-                <strong>Query Reformulations:</strong>
-                {result.reformulatedQueries.map((q, idx) => (
-                  <span
-                    key={idx}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    <code style={{ color: "var(--primary-hover)" }}>"{q}"</code>
-                    {idx < result.reformulatedQueries.length - 1 && (
-                      <ArrowRight size={11} />
-                    )}
-                  </span>
-                ))}
-              </div>
+                <Edit2 size={13} />
+              </button>
             )}
+          </div>
 
-          {isFallback ? (
-            <div className="fallback-box">
-              <SearchX
-                size={22}
-                style={{
-                  flexShrink: 0,
-                  marginTop: "2px",
-                  color: "var(--primary)",
-                }}
-              />
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "6px",
-                  width: "100%",
-                }}
+          <div className="chat-header-tokens">
+            {totalSessionTokens.total > 0 && (
+              <span
+                className="token-pill"
+                title="Aggregate token metrics for this chat session"
               >
-                <strong
-                  style={{ color: "var(--text-primary)", fontSize: "14px" }}
-                >
-                  No Related Knowledge Found
-                </strong>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "var(--text-secondary)",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {result.answer}
-                </p>
-                <div
-                  style={{
-                    marginTop: "6px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    flexWrap: "wrap",
-                    fontSize: "12px",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  <span>Tip: Try rephrasing with different keywords, or</span>
-                  {onNavigate && (
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      style={{
-                        padding: "3px 8px",
-                        fontSize: "12px",
-                        color: "var(--primary)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "var(--radius-sm)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                      onClick={() => onNavigate("/add")}
-                    >
-                      <Plus size={13} />
-                      Add Knowledge on this topic
-                    </button>
-                  )}
-                </div>
-              </div>
+                <Cpu size={12} style={{ marginRight: "2px" }} />
+                In: <strong>{totalSessionTokens.prompt}</strong> &bull; Out:{" "}
+                <strong>{totalSessionTokens.completion}</strong> &bull; Total:{" "}
+                <strong>{totalSessionTokens.total}</strong>
+              </span>
+            )}
+          </div>
+        </header>
+
+        <div className="chat-thread">
+          {loadingDetail && !sessionDetail ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                color: "var(--text-muted)",
+                gap: "8px",
+              }}
+            >
+              <Loader2 size={20} className="spin" />
+              Loading conversation...
+            </div>
+          ) : sessionDetail?.turns.length === 0 && !pendingQuestion ? (
+            <div className="empty-state" style={{ margin: "auto 0" }}>
+              <Sparkles size={36} color="var(--primary)" />
+              <h3 style={{ margin: 0, color: "var(--text-primary)" }}>
+                Start a New Discussion
+              </h3>
+              <p>
+                Ask questions grounded strictly in your personal notes and
+                ingested URLs. Answers are iteratively graded with Self-RAG.
+              </p>
             </div>
           ) : (
-            <div className="answer-body">
-              <MarkdownRenderer content={result.answer} />
-            </div>
-          )}
+            <>
+              {sessionDetail?.turns.map((turn: ChatTurnData) => (
+                <ChatTurnItem
+                  key={turn.id}
+                  turn={turn}
+                  onNavigate={onNavigate}
+                />
+              ))}
 
-          {result.sources && result.sources.length > 0 && (
-            <div className="citations-section">
-              <h4>Attributed Sources ({result.sources.length})</h4>
-              <div className="citations-grid">
-                {result.sources.map((src, index) => {
-                  const scorePercent =
-                    typeof src.score === "number" && !Number.isNaN(src.score)
-                      ? Math.round(src.score * 100)
-                      : null;
-                  return (
-                    <div key={src.itemId || index} className="citation-card">
-                      <div className="citation-card-header">
-                        <span className="citation-badge">
-                          [Source {index + 1}]
-                        </span>
-                        <span className="citation-score">
-                          {scorePercent !== null
-                            ? `${scorePercent}% similarity`
-                            : "Grounded passage"}
-                        </span>
-                      </div>
-
-                      <div className="citation-title" title={src.title}>
-                        <BookOpen
-                          size={13}
-                          style={{
-                            display: "inline",
-                            marginRight: "6px",
-                            verticalAlign: "middle",
-                          }}
-                        />
-                        {src.title}
-                      </div>
-
-                      <div className="citation-snippet" title={src.snippet}>
-                        "{src.snippet}"
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          marginTop: "auto",
-                          paddingTop: "8px",
-                          gap: "8px",
-                        }}
-                      >
-                        {onNavigate && src.itemId && (
-                          <button
-                            type="button"
-                            className="citation-link"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                            onClick={() => onNavigate(`/library/${src.itemId}`)}
-                          >
-                            Inspect item
-                            <ArrowRight size={11} />
-                          </button>
-                        )}
-                        {src.url && (
-                          <a
-                            href={src.url}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="citation-link"
-                          >
-                            Source Link
-                            <ExternalLink size={11} />
-                          </a>
-                        )}
+              {pendingQuestion && (
+                <div className="chat-turn-group">
+                  <div className="user-msg-row">
+                    <div className="user-bubble">
+                      <div>{pendingQuestion}</div>
+                      <div className="user-bubble-footer">
+                        <span>Thinking...</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "var(--radius-full)",
+                        background: "var(--surface-secondary)",
+                        border: "1px solid var(--border)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <User size={15} color="var(--text-secondary)" />
+                    </div>
+                  </div>
+
+                  <div className="assistant-msg-row">
+                    <div className="assistant-avatar">
+                      <Bot size={16} />
+                    </div>
+                    <div className="loading-box" style={{ margin: 0, flex: 1 }}>
+                      <Loader2
+                        size={18}
+                        className="spin"
+                        color="var(--primary-hover)"
+                      />
+                      <div>
+                        <strong>Self-RAG Loop Active:</strong> Retrieving
+                        Pinecone vectors, grading context relevance, and
+                        verifying answer groundedness...
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {errorMessage && (
+            <div className="alert alert-error">
+              <AlertTriangle size={18} />
+              <span>{errorMessage}</span>
             </div>
           )}
+
+          <div ref={chatEndRef} />
         </div>
-      )}
+
+        <ChatComposer
+          question={question}
+          onChangeQuestion={setQuestion}
+          onSubmit={handleSendQuery}
+          loading={loadingQuery}
+        />
+      </main>
     </div>
   );
 }

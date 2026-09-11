@@ -24,3 +24,32 @@ model Item {
 
   @@map("items")
 }
+
+model ChatSession {
+  id        String     @id @default(uuid())
+  title     String     @default("New Conversation")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  turns     ChatTurn[]
+
+  @@map("chat_sessions")
+}
+
+model ChatTurn {
+  id               String   @id @default(uuid())
+  sessionId        String   @map("session_id")
+  question         String
+  answer           String
+  sources          String?
+  iterations       Int?
+  isFallback       Boolean  @default(false) @map("is_fallback")
+  promptTokens     Int?     @map("prompt_tokens")
+  completionTokens Int?     @map("completion_tokens")
+  totalTokens      Int?     @map("total_tokens")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("chat_turns")
+}
