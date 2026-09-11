@@ -32,6 +32,15 @@ interface ApiErrorResponse {
   message?: string;
 }
 
+export const API_BASE_URL = (
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) || ""
+).replace(/\/+$/, "");
+
+export function apiUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let errorMessage = `Request failed with status ${res.status}`;
@@ -51,7 +60,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function fetchItems(): Promise<Item[]> {
-  const res = await fetch("/items");
+  const res = await fetch(apiUrl("/items"));
   const data = await handleResponse<{ items: Item[] }>(res);
   return data.items;
 }
@@ -59,7 +68,7 @@ export async function fetchItems(): Promise<Item[]> {
 export async function ingestItem(
   payload: IngestPayload,
 ): Promise<IngestResult> {
-  const res = await fetch("/ingest", {
+  const res = await fetch(apiUrl("/ingest"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -89,7 +98,7 @@ export async function askQuery(
   question: string,
   sessionId?: string,
 ): Promise<RagResponse> {
-  const res = await fetch("/query", {
+  const res = await fetch(apiUrl("/query"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, sessionId }),
@@ -102,7 +111,7 @@ export async function askQueryStream(
   sessionId?: string,
   callbacks?: StreamQueryCallbacks,
 ): Promise<RagResponse> {
-  const res = await fetch("/query", {
+  const res = await fetch(apiUrl("/query"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -208,26 +217,26 @@ export async function askQueryStream(
 }
 
 export async function fetchItemById(id: string): Promise<Item> {
-  const res = await fetch(`/items/${encodeURIComponent(id)}`);
+  const res = await fetch(apiUrl(`/items/${encodeURIComponent(id)}`));
   const data = await handleResponse<{ item: Item }>(res);
   return data.item;
 }
 
 export async function fetchSessions(): Promise<ChatSessionSummary[]> {
-  const res = await fetch("/sessions");
+  const res = await fetch(apiUrl("/sessions"));
   const data = await handleResponse<{ sessions: ChatSessionSummary[] }>(res);
   return data.sessions;
 }
 
 export async function fetchSessionById(id: string): Promise<ChatSessionDetail> {
-  const res = await fetch(`/sessions/${encodeURIComponent(id)}`);
+  const res = await fetch(apiUrl(`/sessions/${encodeURIComponent(id)}`));
   return handleResponse<ChatSessionDetail>(res);
 }
 
 export async function createSession(
   title?: string,
 ): Promise<ChatSessionSummary> {
-  const res = await fetch("/sessions", {
+  const res = await fetch(apiUrl("/sessions"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -239,7 +248,7 @@ export async function updateSessionTitle(
   id: string,
   title: string,
 ): Promise<ChatSessionSummary> {
-  const res = await fetch(`/sessions/${encodeURIComponent(id)}`, {
+  const res = await fetch(apiUrl(`/sessions/${encodeURIComponent(id)}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -248,7 +257,7 @@ export async function updateSessionTitle(
 }
 
 export async function deleteSession(id: string): Promise<void> {
-  const res = await fetch(`/sessions/${encodeURIComponent(id)}`, {
+  const res = await fetch(apiUrl(`/sessions/${encodeURIComponent(id)}`), {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -260,7 +269,7 @@ export async function updateNoteItem(
   id: string,
   data: { title?: string; content?: string },
 ): Promise<Item> {
-  const res = await fetch(`/items/${encodeURIComponent(id)}`, {
+  const res = await fetch(apiUrl(`/items/${encodeURIComponent(id)}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -270,7 +279,7 @@ export async function updateNoteItem(
 }
 
 export async function deleteItem(id: string): Promise<void> {
-  const res = await fetch(`/items/${encodeURIComponent(id)}`, {
+  const res = await fetch(apiUrl(`/items/${encodeURIComponent(id)}`), {
     method: "DELETE",
   });
   await handleResponse<{ success: boolean; message: string }>(res);

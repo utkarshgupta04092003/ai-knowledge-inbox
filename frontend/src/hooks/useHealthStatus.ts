@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiUrl } from "../services/api";
 
 export type HealthStatus = "checking" | "connected" | "error";
 
 async function measureHealthLatency(signal?: AbortSignal): Promise<number> {
   const startedAt = performance.now();
-  const response = await fetch("/health", { signal });
+  const response = await fetch(apiUrl("/health"), { signal });
   if (!response.ok) throw new Error("Health check failed");
   return Math.round(performance.now() - startedAt);
 }
