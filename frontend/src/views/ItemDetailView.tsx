@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { MarkdownRenderer } from "../components/MarkdownRenderer";
 import { fetchItemById, Item } from "../services/api";
 
 interface ItemDetailViewProps {
@@ -190,7 +191,9 @@ export function ItemDetailView({
         {/* Main Content Area */}
         <div className="panel-card item-content-card">
           <h2 className="detail-section-title">Full Content</h2>
-          <div className="item-content-body">{item.content}</div>
+          <div className="item-content-body">
+            <MarkdownRenderer content={item.content} />
+          </div>
         </div>
 
         {/* Metadata Sidebar Panel */}

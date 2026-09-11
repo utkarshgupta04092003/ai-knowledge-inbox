@@ -81,7 +81,7 @@ export function AddView({ onIngested, onNavigate }: AddViewProps) {
         </div>
       </div>
 
-      <div className="panel-card ingest-card" style={{ maxWidth: "640px" }}>
+      <div className="panel-card ingest-card">
         {savedResult ? (
           <div className="save-success-panel">
             <div className="success-icon-wrap">

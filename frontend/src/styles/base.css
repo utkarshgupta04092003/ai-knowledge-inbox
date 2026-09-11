@@ -98,10 +98,14 @@ html {
   background: var(--background);
 }
 
-body {
+html, body {
+  height: 100%;
   margin: 0;
+  overflow: hidden;
+}
+
+body {
   min-width: 320px;
-  min-height: 100vh;
   background: var(--background);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -112,9 +116,16 @@ button, a, input, textarea {
   font-family: inherit;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+button:focus-visible, a:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
+}
+
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: none !important;
 }
 
 .spin {

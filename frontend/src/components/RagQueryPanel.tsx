@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { askQuery, RagResponse } from "../services/api";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 const SAMPLE_QUERIES = [
   "What are the main topics in my saved notes?",
@@ -305,7 +306,9 @@ export function RagQueryPanel({
               </div>
             </div>
           ) : (
-            <div className="answer-body">{result.answer}</div>
+            <div className="answer-body">
+              <MarkdownRenderer content={result.answer} />
+            </div>
           )}
 
           {result.sources && result.sources.length > 0 && (

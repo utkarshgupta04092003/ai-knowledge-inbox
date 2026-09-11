@@ -13,6 +13,7 @@ import {
   User,
 } from "lucide-react";
 import React, { useState } from "react";
+import { MarkdownRenderer } from "../components/MarkdownRenderer";
 import {
   askQuery,
   ingestItem,
@@ -599,7 +600,9 @@ export function DashboardView({
                 <div className="ai-icon-pill">
                   <Sparkles size={13} />
                 </div>
-                <div className="answer-body-text">{latestAnswer.answer}</div>
+                <div className="answer-body-text">
+                  <MarkdownRenderer content={latestAnswer.answer} />
+                </div>
               </div>
 
               {latestAnswer.sources && latestAnswer.sources.length > 0 && (
