@@ -131,6 +131,16 @@ export class SessionService {
     });
   }
 
+  async getLastTurns(sessionId: string, limit = 5): Promise<ChatTurnData[]> {
+    const turns = await this.prisma.chatTurn.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+
+    return turns.reverse().map(toTurnData);
+  }
+
   async addTurn(
     sessionId: string,
     data: CreateTurnInput,

@@ -135,13 +135,35 @@ export interface CreateTurnInput {
   totalTokens?: number | null;
 }
 
+export interface ConversationTurn {
+  question: string;
+  answer: string;
+}
+
+export interface StreamCallbacks {
+  onStatus?: (status: { stage: string; message: string; iteration?: number }) => void;
+  onSources?: (sources: SourceCitation[]) => void;
+  onToken?: (token: string) => void;
+}
+
 export interface ILlmClient {
-  generateAnswer(systemPrompt: string, userPrompt: string): Promise<string>;
+  generateAnswer(
+    systemPrompt: string,
+    userPrompt: string,
+    history?: ConversationTurn[],
+  ): Promise<string>;
+  generateAnswerStream?(
+    systemPrompt: string,
+    userPrompt: string,
+    onDelta: (chunk: string) => void,
+    history?: ConversationTurn[],
+  ): Promise<string>;
   gradeRetrieval(question: string, context: string): Promise<boolean>;
   rewriteQuery(
     originalQuestion: string,
     attempt: number,
     pastQueries: string[],
+    history?: ConversationTurn[],
   ): Promise<string>;
   gradeAnswer(
     question: string,

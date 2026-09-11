@@ -3,6 +3,7 @@ import { getEncoding, Tiktoken } from "js-tiktoken";
 import { AppError } from "../middleware/error.middleware.js";
 import { RagService } from "../services/rag.service.js";
 import { SessionService } from "../services/session.service.js";
+import type { ConversationTurn } from "../types/index.js";
 import { logger } from "../utils/logger.js";
 
 let tokenizer: Tiktoken | null = null;
@@ -72,14 +73,107 @@ export function createQueryRouter(
           sessionId = newSession.id;
         }
 
+        const lastTurns = await sessionService.getLastTurns(sessionId, 5);
+        const history: ConversationTurn[] = lastTurns.map((turn) => ({
+          question: turn.question,
+          answer: turn.answer,
+        }));
+
+        const isStream =
+          req.body?.stream === true ||
+          Boolean(req.headers.accept?.includes("text/event-stream"));
+
+        if (isStream) {
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "X-Accel-Buffering": "no",
+          });
+
+          const sendEvent = (event: string, data: unknown) => {
+            res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          };
+
+          sendEvent("session", { sessionId });
+
+          logger.info("http_query_stream_received", {
+            question: trimmedQuestion,
+            sessionId,
+          });
+
+          const result = ragService.answerQuestionStream
+            ? await ragService.answerQuestionStream(
+                trimmedQuestion,
+                {
+                  onStatus: (status) => sendEvent("status", status),
+                  onSources: (sources) => sendEvent("sources", { sources }),
+                  onToken: (token) => sendEvent("delta", { delta: token }),
+                },
+                history,
+              )
+            : await ragService.answerQuestion(trimmedQuestion, history);
+
+          const enc = getTokenizer();
+          const historyTokens = history.reduce(
+            (sum, turn) =>
+              sum +
+              enc.encode(turn.question).length +
+              enc.encode(turn.answer).length,
+            0,
+          );
+          const promptTokens =
+            enc.encode(trimmedQuestion).length + historyTokens;
+          const completionTokens = enc.encode(result.answer).length;
+          const totalTokens = promptTokens + completionTokens;
+
+          const turn = await sessionService.addTurn(sessionId, {
+            question: trimmedQuestion,
+            answer: result.answer,
+            sources: result.sources,
+            iterations: result.iterations,
+            isFallback: result.isFallback,
+            promptTokens,
+            completionTokens,
+            totalTokens,
+          });
+
+          logger.info("http_query_stream_completed", {
+            question: trimmedQuestion,
+            sessionId,
+            turnId: turn.id,
+            promptTokens,
+            completionTokens,
+          });
+
+          sendEvent("done", {
+            ...result,
+            sessionId,
+            turnId: turn.id,
+            promptTokens,
+            completionTokens,
+            totalTokens,
+          });
+
+          res.end();
+          return;
+        }
+
         logger.info("http_query_received", {
           question: trimmedQuestion,
           sessionId,
         });
-        const result = await ragService.answerQuestion(trimmedQuestion);
+        const result = await ragService.answerQuestion(trimmedQuestion, history);
 
         const enc = getTokenizer();
-        const promptTokens = enc.encode(trimmedQuestion).length;
+        const historyTokens = history.reduce(
+          (sum, turn) =>
+            sum +
+            enc.encode(turn.question).length +
+            enc.encode(turn.answer).length,
+          0,
+        );
+        const promptTokens = enc.encode(trimmedQuestion).length + historyTokens;
         const completionTokens = enc.encode(result.answer).length;
         const totalTokens = promptTokens + completionTokens;
 
@@ -113,6 +207,16 @@ export function createQueryRouter(
           totalTokens,
         });
       } catch (error) {
+        if (res.headersSent) {
+          res.write(
+            `event: error\ndata: ${JSON.stringify({
+              message:
+                error instanceof Error ? error.message : "Query execution failed.",
+            })}\n\n`,
+          );
+          res.end();
+          return;
+        }
         next(error);
       }
     },

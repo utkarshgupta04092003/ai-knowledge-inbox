@@ -2286,3 +2286,18 @@ html[data-theme="light"] .hero-card-chip {
   }
 }
 
+.streaming-cursor {
+  display: inline-block;
+  color: var(--primary);
+  font-weight: bold;
+  animation: cursorBlink 0.8s infinite;
+  margin-left: 3px;
+  vertical-align: baseline;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+

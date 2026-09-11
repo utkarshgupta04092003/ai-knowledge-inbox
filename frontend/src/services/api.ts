@@ -21,7 +21,7 @@ export type {
   Item,
   RagResponse,
   SourceCitation,
-  SourceType,
+  SourceType
 };
 
 interface ApiErrorResponse {
@@ -72,6 +72,15 @@ export async function ingestItem(
   };
 }
 
+export interface StreamQueryCallbacks {
+  onSessionId?: (sessionId: string) => void;
+  onStatus?: (status: { stage: string; message: string; iteration?: number }) => void;
+  onSources?: (sources: SourceCitation[]) => void;
+  onDelta?: (delta: string) => void;
+  onDone?: (result: RagResponse) => void;
+  onError?: (error: Error) => void;
+}
+
 export async function askQuery(
   question: string,
   sessionId?: string,
@@ -82,6 +91,101 @@ export async function askQuery(
     body: JSON.stringify({ question, sessionId }),
   });
   return handleResponse<RagResponse>(res);
+}
+
+export async function askQueryStream(
+  question: string,
+  sessionId?: string,
+  callbacks?: StreamQueryCallbacks,
+): Promise<RagResponse> {
+  const res = await fetch("/query", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({ question, sessionId, stream: true }),
+  });
+
+  if (!res.ok) {
+    let errorMessage = `Request failed with status ${res.status}`;
+    try {
+      const data = (await res.json()) as ApiErrorResponse;
+      if (data.error?.message) {
+        errorMessage = data.error.message;
+      } else if (data.message) {
+        errorMessage = data.message;
+      }
+    } catch {
+      // ignore
+    }
+    const err = new Error(errorMessage);
+    callbacks?.onError?.(err);
+    throw err;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new Error("ReadableStream not supported by browser.");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResult: RagResponse | null = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      let currentEvent = "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        if (trimmed.startsWith("event:")) {
+          currentEvent = trimmed.slice(6).trim();
+        } else if (trimmed.startsWith("data:")) {
+          const rawData = trimmed.slice(5).trim();
+          try {
+            const data = JSON.parse(rawData);
+            if (currentEvent === "session" && data.sessionId) {
+              callbacks?.onSessionId?.(data.sessionId);
+            } else if (currentEvent === "status") {
+              callbacks?.onStatus?.(data);
+            } else if (currentEvent === "sources" && Array.isArray(data.sources)) {
+              callbacks?.onSources?.(data.sources);
+            } else if (currentEvent === "delta" && typeof data.delta === "string") {
+              callbacks?.onDelta?.(data.delta);
+            } else if (currentEvent === "done") {
+              finalResult = data as RagResponse;
+              callbacks?.onDone?.(finalResult);
+            } else if (currentEvent === "error") {
+              const err = new Error(data.message || "Query stream failed.");
+              callbacks?.onError?.(err);
+              throw err;
+            }
+          } catch (jsonErr) {
+            if (jsonErr instanceof Error && currentEvent === "error") {
+              throw jsonErr;
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!finalResult) {
+    throw new Error("Stream ended before receiving completion event.");
+  }
+
+  return finalResult;
 }
 
 export async function fetchItemById(id: string): Promise<Item> {

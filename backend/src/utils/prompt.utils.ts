@@ -1,4 +1,5 @@
 import { FALLBACK_MESSAGES } from "../config/prompts.js";
+import type { ConversationTurn } from "../types/index.js";
 
 export function getRandomFallbackMessage(): string {
   const index = Math.floor(Math.random() * FALLBACK_MESSAGES.length);
@@ -23,8 +24,20 @@ export function formatQueryRewritePrompt(
   originalQuestion: string,
   attempt: number,
   pastQueries: string[],
+  history?: ConversationTurn[],
 ): string {
-  return `Original Question: ${originalQuestion}\nAttempt: ${attempt}\nPrevious Queries:\n${pastQueries.map((q, idx) => `${idx + 1}. ${q}`).join("\n")}`;
+  let prompt = "";
+  if (history && history.length > 0) {
+    const historyText = history
+      .map(
+        (t, idx) =>
+          `Turn ${idx + 1}:\nUser: ${t.question}\nAssistant: ${t.answer}`,
+      )
+      .join("\n\n");
+    prompt += `Recent Conversation Context:\n${historyText}\n\n`;
+  }
+  prompt += `Current User Question: ${originalQuestion}\nAttempt: ${attempt}\nPrevious Search Queries:\n${pastQueries.map((q, idx) => `${idx + 1}. ${q}`).join("\n")}`;
+  return prompt;
 }
 
 export function formatAnswerGradingPrompt(

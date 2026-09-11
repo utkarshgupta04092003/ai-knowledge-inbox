@@ -131,6 +131,25 @@ describe("SessionService", () => {
     assert.equal(detail?.title, "Renamed Title");
   });
 
+  it("retrieves the last N turns in chronological order", async () => {
+    const session = await sessionService.createSession("Memory Test");
+    for (let i = 1; i <= 7; i++) {
+      await sessionService.addTurn(session.id, {
+        question: `Question ${i}`,
+        answer: `Answer ${i}`,
+      });
+    }
+
+    const lastTurns = await sessionService.getLastTurns(session.id, 5);
+    assert.equal(lastTurns.length, 5);
+    // Turns should be 3, 4, 5, 6, 7 in chronological order
+    assert.equal(lastTurns[0].question, "Question 3");
+    assert.equal(lastTurns[1].question, "Question 4");
+    assert.equal(lastTurns[2].question, "Question 5");
+    assert.equal(lastTurns[3].question, "Question 6");
+    assert.equal(lastTurns[4].question, "Question 7");
+  });
+
   it("deletes a session and cascades deletion of its turns", async () => {
     const session = await sessionService.createSession("To delete");
     await sessionService.addTurn(session.id, {

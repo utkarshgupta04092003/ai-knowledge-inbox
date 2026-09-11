@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  askQuery,
+  askQueryStream,
   createSession,
   deleteSession,
   fetchSessionById,
@@ -23,6 +23,7 @@ import {
 import { ChatComposer } from "./chat/ChatComposer.js";
 import { ChatSidebar } from "./chat/ChatSidebar.js";
 import { ChatTurnItem } from "./chat/ChatTurnItem.js";
+import { MarkdownRenderer } from "./MarkdownRenderer.js";
 
 interface RagQueryPanelProps {
   initialQuestion?: string;
@@ -42,6 +43,10 @@ export function RagQueryPanel({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [streamingAnswer, setStreamingAnswer] = useState<string>("");
+  const [streamingStatus, setStreamingStatus] = useState<string>(
+    "Searching knowledge library...",
+  );
   const [question, setQuestion] = useState(initialQuestion ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -54,7 +59,7 @@ export function RagQueryPanel({
 
   useEffect(() => {
     scrollToBottom();
-  }, [sessionDetail?.turns, loadingQuery, pendingQuestion]);
+  }, [sessionDetail?.turns, loadingQuery, pendingQuestion, streamingAnswer]);
 
   useEffect(() => {
     let ignore = false;
@@ -127,15 +132,31 @@ export function RagQueryPanel({
 
     setQuestion("");
     setPendingQuestion(targetQuery);
+    setStreamingAnswer("");
+    setStreamingStatus("Searching knowledge inbox...");
     setLoadingQuery(true);
     setErrorMessage(null);
 
     const currentSessionId = activeSessionId ?? undefined;
+    let resolvedSessionId = currentSessionId;
 
     try {
-      const response = await askQuery(targetQuery, currentSessionId);
+      const response = await askQueryStream(targetQuery, currentSessionId, {
+        onSessionId: (sid) => {
+          resolvedSessionId = sid;
+          if (sid !== activeSessionId) {
+            setActiveSessionId(sid);
+          }
+        },
+        onStatus: (st) => {
+          setStreamingStatus(st.message);
+        },
+        onDelta: (delta) => {
+          setStreamingAnswer((prev) => prev + delta);
+        },
+      });
 
-      const targetSessionId = response.sessionId ?? currentSessionId;
+      const targetSessionId = response.sessionId ?? resolvedSessionId;
       if (targetSessionId && targetSessionId !== activeSessionId) {
         setActiveSessionId(targetSessionId);
       }
@@ -153,6 +174,7 @@ export function RagQueryPanel({
       );
     } finally {
       setPendingQuestion(null);
+      setStreamingAnswer("");
       setLoadingQuery(false);
     }
   };
@@ -382,18 +404,43 @@ export function RagQueryPanel({
                     <div className="assistant-avatar">
                       <Bot size={16} />
                     </div>
-                    <div className="loading-box" style={{ margin: 0, flex: 1 }}>
-                      <Loader2
-                        size={18}
-                        className="spin"
-                        color="var(--primary-hover)"
-                      />
-                      <div>
-                        <strong>Self-RAG Loop Active:</strong> Retrieving
-                        Pinecone vectors, grading context relevance, and
-                        verifying answer groundedness...
+                    {streamingAnswer ? (
+                      <div className="assistant-bubble" style={{ flex: 1 }}>
+                        <div className="assistant-bubble-header">
+                          <div className="assistant-badges">
+                            <span className="telemetry-pill">
+                              <Loader2
+                                size={11}
+                                className="spin"
+                                style={{
+                                  marginRight: "5px",
+                                  display: "inline-block",
+                                  verticalAlign: "middle",
+                                }}
+                              />
+                              Streaming response...
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="assistant-markdown-wrap">
+                          <MarkdownRenderer content={streamingAnswer} />
+                          <span className="streaming-cursor">▊</span>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div
+                        className="loading-box"
+                        style={{ margin: 0, flex: 1 }}
+                      >
+                        <Loader2
+                          size={18}
+                          className="spin"
+                          color="var(--primary-hover)"
+                        />
+                        <div>{streamingStatus}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
