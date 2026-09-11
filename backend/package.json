@@ -32,7 +32,9 @@
     "express": "^4.21.2",
     "js-tiktoken": "^1.0.21",
     "openai": "^7.15.0",
-    "swagger-ui-express": "^5.0.1"
+    "prisma": "^7.10.0",
+    "swagger-ui-express": "^5.0.1",
+    "typescript": "^5.7.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -40,9 +42,7 @@
     "@types/node": "^22.10.2",
     "@types/supertest": "^7.2.1",
     "@types/swagger-ui-express": "^4.1.8",
-    "prisma": "^7.10.0",
     "supertest": "^7.2.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "tsx": "^4.19.2"
   }
 }

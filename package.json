@@ -14,6 +14,7 @@
     "build:backend": "npm --prefix backend run build",
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run build:backend && npm run build:frontend",
+    "heroku-postbuild": "npm --prefix backend install && npm --prefix backend run build",
     "test:backend": "npm --prefix backend run test",
     "test": "npm run test:backend",
     "precommit": "npm run typecheck && npm run lint && npm run test && npm run build"
