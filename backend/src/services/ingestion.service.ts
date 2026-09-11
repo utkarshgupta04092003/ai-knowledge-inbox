@@ -1,12 +1,15 @@
 import { UrlFetchService } from "../fetchers/url.fetcher.js";
+import { AppError } from "../middleware/error.middleware.js";
 import type {
   IEmbeddingService,
   IIngestionService,
   IngestResult,
   IPineconeService,
   ISparseEncoderService,
+  Item,
   IUrlFetchService,
   PineconeChunkRecord,
+  UpdateItemInput,
 } from "../types/index.js";
 import { validateIngestPayload } from "../utils/validation.js";
 import { ChunkingService } from "./chunking.service.js";
@@ -78,5 +81,62 @@ export class IngestionService implements IIngestionService {
       item,
       chunkCount: chunks.length,
     };
+  }
+
+  async deleteItem(id: string): Promise<void> {
+    const existing = await this.itemService.findById(id);
+    if (!existing) {
+      throw new AppError(404, "NOT_FOUND", "Item not found.");
+    }
+
+    await this.pineconeService.deleteByItemId(id);
+    await this.itemService.delete(id);
+  }
+
+  async updateNoteItem(id: string, input: UpdateItemInput): Promise<Item> {
+    const existing = await this.itemService.findById(id);
+    if (!existing) {
+      throw new AppError(404, "NOT_FOUND", "Item not found.");
+    }
+
+    if (existing.sourceType !== "note") {
+      throw new AppError(400, "BAD_REQUEST", "Only note items can be edited.");
+    }
+
+    const title = input.title !== undefined ? input.title.trim() : existing.title;
+    const content = input.content !== undefined ? input.content.trim() : existing.content;
+
+    if (!title || !content) {
+      throw new AppError(400, "VALIDATION_ERROR", "Title and content cannot be empty.");
+    }
+
+    const updated = await this.itemService.update(id, { title, content });
+
+    // Re-index in Pinecone with updated content/title
+    await this.pineconeService.deleteByItemId(id);
+
+    const chunks = this.chunkingService.chunkText(updated.content);
+    if (chunks.length > 0) {
+      const texts = chunks.map((c) => c.text);
+      const embeddings = await this.embeddingService.embedChunks(texts);
+
+      const records: PineconeChunkRecord[] = chunks.map((chunk, index) => ({
+        id: `${updated.id}#${chunk.chunkIndex}`,
+        values: embeddings[index],
+        sparseValues: this.sparseEncoderService.encodeText(chunk.text),
+        metadata: {
+          itemId: updated.id,
+          chunkIndex: chunk.chunkIndex,
+          text: chunk.text,
+          title: updated.title,
+          sourceUrl: updated.sourceUrl || "",
+          sourceType: updated.sourceType,
+        },
+      }));
+
+      await this.pineconeService.upsertChunks(records);
+    }
+
+    return updated;
   }
 }

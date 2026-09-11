@@ -132,3 +132,24 @@ export async function deleteSession(id: string): Promise<void> {
     throw new Error(`Failed to delete session: ${res.statusText}`);
   }
 }
+
+export async function updateNoteItem(
+  id: string,
+  data: { title?: string; content?: string },
+): Promise<Item> {
+  const res = await fetch(`/items/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const result = await handleResponse<{ item: Item }>(res);
+  return result.item;
+}
+
+export async function deleteItem(id: string): Promise<void> {
+  const res = await fetch(`/items/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  await handleResponse<{ success: boolean; message: string }>(res);
+}
+

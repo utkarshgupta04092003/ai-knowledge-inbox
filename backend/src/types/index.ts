@@ -20,6 +20,11 @@ export interface CreateItemInput {
   sourceUrl?: string | null;
 }
 
+export interface UpdateItemInput {
+  title?: string;
+  content?: string;
+}
+
 export interface SparseVector {
   indices: number[];
   values: number[];
@@ -212,4 +217,6 @@ export interface IngestResult {
 
 export interface IIngestionService {
   ingest(payload: IngestPayload): Promise<IngestResult>;
+  deleteItem(id: string): Promise<void>;
+  updateNoteItem(id: string, input: UpdateItemInput): Promise<Item>;
 }

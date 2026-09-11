@@ -1,6 +1,6 @@
 import type { Item as PrismaItem, PrismaClient } from "../generated/prisma/client.js";
 import { getPrismaClient } from "../db/prisma.js";
-import type { CreateItemInput, Item } from "../types/index.js";
+import type { CreateItemInput, Item, UpdateItemInput } from "../types/index.js";
 
 function toItem(item: PrismaItem): Item {
   return {
@@ -35,5 +35,26 @@ export class ItemService {
   async findById(id: string): Promise<Item | null> {
     const item = await this.prisma.item.findUnique({ where: { id } });
     return item ? toItem(item) : null;
+  }
+
+  async update(id: string, data: UpdateItemInput): Promise<Item> {
+    const item = await this.prisma.item.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.content !== undefined ? { content: data.content } : {}),
+      },
+    });
+
+    return toItem(item);
+  }
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      await this.prisma.item.delete({ where: { id } });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

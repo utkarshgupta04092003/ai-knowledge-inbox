@@ -76,7 +76,12 @@ export default function App() {
           )}
 
           {route.name === "item-detail" && (
-            <ItemDetailView id={route.id} items={items} onNavigate={navigate} />
+            <ItemDetailView
+              id={route.id}
+              items={items}
+              onNavigate={navigate}
+              onRefresh={loadItems}
+            />
           )}
 
           {route.name === "query" && (

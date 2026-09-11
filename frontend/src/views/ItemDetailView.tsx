@@ -2,33 +2,51 @@ import {
   AlertCircle,
   ArrowLeft,
   Calendar,
+  Check,
   Database,
+  Edit3,
   ExternalLink,
   FileText,
   Globe,
   Hash,
   Loader2,
   Sparkles,
+  Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
-import { fetchItemById, Item } from "../services/api";
+import { deleteItem, fetchItemById, Item, updateNoteItem } from "../services/api";
 
 interface ItemDetailViewProps {
   id: string;
   items?: Item[];
   onNavigate: (path: string) => void;
+  onRefresh?: () => void;
 }
 
 export function ItemDetailView({
   id,
   items = [],
   onNavigate,
+  onRefresh,
 }: ItemDetailViewProps) {
   const existingItem = items.find((i) => i.id === id);
   const [fetchedItem, setFetchedItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(!existingItem);
   const [error, setError] = useState<string | null>(null);
+
+  // Edit states (note only)
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Delete modal states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const item = existingItem ?? fetchedItem;
 
@@ -76,6 +94,52 @@ export function ItemDetailView({
     onNavigate(`/query?q=${encodeURIComponent(prompt)}`);
   };
 
+  const handleStartEdit = () => {
+    if (!item) return;
+    setEditTitle(item.title);
+    setEditContent(item.content);
+    setSaveError(null);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setSaveError(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!item || !editTitle.trim() || !editContent.trim()) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await updateNoteItem(item.id, {
+        title: editTitle.trim(),
+        content: editContent.trim(),
+      });
+      setFetchedItem(updated);
+      setIsEditing(false);
+      onRefresh?.();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save note changes.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!item) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteItem(item.id);
+      onRefresh?.();
+      onNavigate("/library");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete knowledge item.");
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="view-container">
@@ -119,6 +183,7 @@ export function ItemDetailView({
 
   return (
     <div className="view-container">
+      {/* Top action navigation */}
       <div className="item-detail-top-nav">
         <button
           type="button"
@@ -129,16 +194,82 @@ export function ItemDetailView({
           Back to Library
         </button>
 
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={handleAskAboutThis}
-        >
-          <Sparkles size={16} />
-          <span>Ask about this</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                className="chip-btn"
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+              >
+                <X size={14} />
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSaveEdit}
+                disabled={isSaving || !editTitle.trim() || !editContent.trim()}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={14} className="spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              {item.sourceType === "note" && (
+                <button
+                  type="button"
+                  className="chip-btn"
+                  onClick={handleStartEdit}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <Edit3 size={14} />
+                  <span>Edit Note</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="chip-btn btn-danger-soft"
+                onClick={() => setShowDeleteConfirm(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <Trash2 size={14} />
+                <span>Delete</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleAskAboutThis}
+              >
+                <Sparkles size={16} />
+                <span>Ask about this</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
+      {saveError && (
+        <div className="alert alert-error" style={{ marginBottom: "16px" }}>
+          <AlertCircle size={16} />
+          <span>{saveError}</span>
+        </div>
+      )}
+
+      {/* Header Info */}
       <div className="item-detail-header">
         <div
           style={{
@@ -171,7 +302,40 @@ export function ItemDetailView({
           </span>
         </div>
 
-        <h1 className="item-detail-title">{item.title}</h1>
+        {isEditing ? (
+          <div style={{ marginTop: "8px", marginBottom: "8px" }}>
+            <label
+              htmlFor="edit-note-title"
+              style={{
+                display: "block",
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "var(--text-muted)",
+                marginBottom: "6px",
+              }}
+            >
+              Note Title
+            </label>
+            <input
+              id="edit-note-title"
+              type="text"
+              className="quick-ask-input"
+              style={{
+                width: "100%",
+                fontSize: "18px",
+                fontWeight: 600,
+                padding: "10px 14px",
+                borderRadius: "8px",
+              }}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Enter note title..."
+              disabled={isSaving}
+            />
+          </div>
+        ) : (
+          <h1 className="item-detail-title">{item.title}</h1>
+        )}
 
         {item.sourceUrl && (
           <a
@@ -190,9 +354,43 @@ export function ItemDetailView({
       <div className="item-detail-grid">
         {/* Main Content Area */}
         <div className="panel-card item-content-card">
-          <h2 className="detail-section-title">Full Content</h2>
+          <h2 className="detail-section-title">
+            {isEditing ? "Edit Note Content" : "Full Content"}
+          </h2>
           <div className="item-content-body">
-            <MarkdownRenderer content={item.content} />
+            {isEditing ? (
+              <div>
+                <textarea
+                  className="quick-ask-input"
+                  style={{
+                    width: "100%",
+                    minHeight: "320px",
+                    padding: "12px",
+                    fontFamily: "inherit",
+                    fontSize: "14px",
+                    lineHeight: 1.6,
+                    borderRadius: "8px",
+                    resize: "vertical",
+                  }}
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  placeholder="Enter note content in markdown..."
+                  disabled={isSaving}
+                />
+                <div
+                  style={{
+                    marginTop: "8px",
+                    fontSize: "12px",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Saving this note will automatically re-chunk and update its semantic
+                  vectors in Pinecone.
+                </div>
+              </div>
+            ) : (
+              <MarkdownRenderer content={item.content} />
+            )}
           </div>
         </div>
 
@@ -252,6 +450,9 @@ export function ItemDetailView({
               marginTop: "18px",
               paddingTop: "14px",
               borderTop: "1px solid var(--border)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
             }}
           >
             <button
@@ -263,9 +464,121 @@ export function ItemDetailView({
               <Sparkles size={16} />
               <span>Ask about this item</span>
             </button>
+
+            {item.sourceType === "note" && !isEditing && (
+              <button
+                type="button"
+                className="chip-btn"
+                style={{ width: "100%", justifyContent: "center", padding: "8px 12px" }}
+                onClick={handleStartEdit}
+              >
+                <Edit3 size={14} />
+                <span>Edit Note Content</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="chip-btn btn-danger-soft"
+              style={{ width: "100%", justifyContent: "center", padding: "8px 12px" }}
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 size={14} />
+              <span>Delete Document</span>
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isDeleting && setShowDeleteConfirm(false)}
+        >
+          <div
+            className="modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "460px", width: "100%" }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "rgba(239, 68, 68, 0.15)",
+                  color: "#ef4444",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 600 }}>
+                  Delete Knowledge Item?
+                </h3>
+                <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--text-muted)" }}>
+                  Are you sure you want to delete "{item.title}"?
+                </p>
+              </div>
+            </div>
+
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "20px" }}>
+              This action permanently removes the document from your SQLite library and wipes all
+              associated vector chunks from Pinecone. This cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div className="alert alert-error" style={{ marginBottom: "16px" }}>
+                <AlertCircle size={14} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                className="chip-btn"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                style={{ padding: "8px 14px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger-solid"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={14} className="spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    Confirm Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

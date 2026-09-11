@@ -1,14 +1,17 @@
 import {
+  AlertCircle,
   ArrowRight,
   ExternalLink,
   FileText,
   Globe,
+  Loader2,
   Plus,
   RefreshCw,
   Search,
+  Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { Item, SourceType } from "../services/api";
+import { deleteItem, type Item, type SourceType } from "../services/api";
 
 interface LibraryViewProps {
   items: Item[];
@@ -27,6 +30,9 @@ export function LibraryView({
 }: LibraryViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
+  const [itemToDelete, setItemToDelete] = useState<Item | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const notesCount = useMemo(
     () => items.filter((i) => i.sourceType === "note").length,
@@ -65,13 +71,28 @@ export function LibraryView({
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteItem(itemToDelete.id);
+      setItemToDelete(null);
+      onRefresh();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete item.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="view-container">
       <div className="view-header">
         <div>
           <h1 className="view-title">Knowledge Library</h1>
           <p className="view-subtitle">
-            Browse, search, and inspect all saved notes and web documents.
+            Browse, search, edit notes, and manage all saved knowledge items.
           </p>
         </div>
 
@@ -194,23 +215,126 @@ export function LibraryView({
                   Inspect Item
                   <ArrowRight size={12} />
                 </span>
-                {item.sourceUrl && (
-                  <a
-                    href={item.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="citation-link"
-                    onClick={(e) => e.stopPropagation()}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {item.sourceUrl && (
+                    <a
+                      href={item.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="citation-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Source Link
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="card-delete-btn"
+                    title="Delete item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setItemToDelete(item);
+                    }}
                   >
-                    Source Link
-                    <ExternalLink size={12} />
-                  </a>
-                )}
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Delete Item Confirmation Modal */}
+      {itemToDelete && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isDeleting && setItemToDelete(null)}
+        >
+          <div
+            className="modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "460px", width: "100%" }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "rgba(239, 68, 68, 0.15)",
+                  color: "#ef4444",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 600 }}>
+                  Delete Knowledge Item?
+                </h3>
+                <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--text-muted)" }}>
+                  Are you sure you want to delete "{itemToDelete.title}"?
+                </p>
+              </div>
+            </div>
+
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "20px" }}>
+              This permanently deletes the document and purges all associated vector embeddings from
+              Pinecone. This action cannot be reversed.
+            </p>
+
+            {deleteError && (
+              <div className="alert alert-error" style={{ marginBottom: "16px" }}>
+                <AlertCircle size={14} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                className="chip-btn"
+                onClick={() => setItemToDelete(null)}
+                disabled={isDeleting}
+                style={{ padding: "8px 14px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger-solid"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={14} className="spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    Confirm Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
