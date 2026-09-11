@@ -1,17 +1,21 @@
-import { EmbeddingService } from "./embedding.service.js";
-import { PineconeService } from "./pinecone.service.js";
 import type {
-  SearchResult,
-  SearchOptions,
-  ISearchService,
   IEmbeddingService,
   IPineconeService,
+  ISearchService,
+  SearchOptions,
+  SearchResult,
+} from "../types/index.js";
+import { EmbeddingService } from "./embedding.service.js";
+import { PineconeService } from "./pinecone.service.js";
+
+export type {
+  ISearchService,
+  SearchOptions,
+  SearchResult,
 } from "../types/index.js";
 
-export type { SearchResult, SearchOptions, ISearchService } from "../types/index.js";
-
 const DEFAULT_TOP_K = 5;
-const DEFAULT_MIN_SCORE = 0.25;
+const DEFAULT_MIN_SCORE = 0.2;
 
 export class SearchService implements ISearchService {
   constructor(
@@ -19,7 +23,10 @@ export class SearchService implements ISearchService {
     private readonly pineconeService: IPineconeService = new PineconeService(),
   ) {}
 
-  async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+  async search(
+    query: string,
+    options: SearchOptions = {},
+  ): Promise<SearchResult[]> {
     const trimmed = query.trim();
     if (!trimmed) return [];
 
@@ -30,7 +37,10 @@ export class SearchService implements ISearchService {
     const matches = await this.pineconeService.querySimilar(queryVector, topK);
 
     return matches
-      .filter((match) => (match.score ?? 0) >= minScore && Boolean(match.metadata?.text))
+      .filter(
+        (match) =>
+          (match.score ?? 0) >= minScore && Boolean(match.metadata?.text),
+      )
       .map((match) => ({
         chunkId: match.id,
         score: match.score ?? 0,

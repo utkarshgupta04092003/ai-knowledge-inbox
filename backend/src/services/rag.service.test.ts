@@ -131,7 +131,7 @@ describe("RagService (Self-RAG Loop)", () => {
 
     assert.equal(result.iterations, 3);
     assert.equal(rewriteCalls, 2); // Rewritten between iter 1->2 and 2->3
-    assert.match(result.answer, /don't have enough information/i);
+    assert.ok(/saved knowledge|no data|couldn't find|no information/i.test(result.answer));
     assert.deepEqual(result.sources, []);
   });
 

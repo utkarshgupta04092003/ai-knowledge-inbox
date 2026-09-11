@@ -16,9 +16,23 @@ export default defineConfig({
       },
       "/items": {
         target: "http://localhost:5000",
-        changeOrigin: true
+        changeOrigin: true,
+        bypass(req) {
+          if (req.headers.accept?.includes("text/html")) {
+            return "/index.html";
+          }
+        }
       },
       "/query": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        bypass(req) {
+          if (req.headers.accept?.includes("text/html")) {
+            return "/index.html";
+          }
+        }
+      },
+      "/api-docs": {
         target: "http://localhost:5000",
         changeOrigin: true
       }

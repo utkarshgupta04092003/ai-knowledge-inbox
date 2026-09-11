@@ -2,6 +2,7 @@
 @import "./styles/shell.css";
 @import "./styles/hero.css";
 @import "./styles/system-status.css";
+@import "./styles/components.css";
 @import "./styles/responsive.css";
 
 @tailwind base;

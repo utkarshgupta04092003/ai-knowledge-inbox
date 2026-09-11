@@ -1,29 +1,33 @@
 import OpenAI from "openai";
 import { getAiClient, getChatModel } from "../config/ai.js";
 import {
-  FALLBACK_MESSAGE,
+  ANSWER_GRADING_SYSTEM_PROMPT,
+  FALLBACK_MESSAGES,
+  QUERY_REWRITE_SYSTEM_PROMPT,
   RAG_SYSTEM_PROMPT,
   RETRIEVAL_GRADING_SYSTEM_PROMPT,
-  QUERY_REWRITE_SYSTEM_PROMPT,
-  ANSWER_GRADING_SYSTEM_PROMPT,
+} from "../config/prompts.js";
+import {
+  formatAnswerGradingPrompt,
+  formatQueryRewritePrompt,
   formatRagUserPrompt,
   formatRetrievalGradingPrompt,
-  formatQueryRewritePrompt,
-  formatAnswerGradingPrompt,
-} from "../config/prompts.js";
-import { SearchService } from "./search.service.js";
+  getRandomFallbackMessage,
+} from "../utils/prompt.utils.js";
 import { AppError } from "../middleware/error.middleware.js";
 import type {
-  SourceCitation,
-  RagResponse,
   ILlmClient,
+  RagResponse,
   SearchResult,
+  SourceCitation,
 } from "../types/index.js";
+import { logger } from "../utils/logger.js";
+import { SearchService } from "./search.service.js";
 
 export type {
-  SourceCitation,
-  RagResponse,
   ILlmClient,
+  RagResponse,
+  SourceCitation,
 } from "../types/index.js";
 
 export class OpenAiLlmClient implements ILlmClient {
@@ -137,6 +141,11 @@ export class RagService {
       throw new AppError(400, "INVALID_INPUT", "Question cannot be empty.");
     }
 
+    logger.info("rag_pipeline_start", {
+      question: trimmed,
+      maxIterations: this.maxIterations,
+    });
+
     let currentQuery = trimmed;
     const pastQueries: string[] = [trimmed];
     let bestAnswer = "";
@@ -144,28 +153,68 @@ export class RagService {
 
     try {
       for (let iteration = 1; iteration <= this.maxIterations; iteration++) {
+        logger.info("rag_iteration_start", {
+          iteration,
+          maxIterations: this.maxIterations,
+          query: currentQuery,
+        });
+
         const matches: SearchResult[] = await this.searchService.search(
           currentQuery,
           { topK: 5 },
         );
 
+        logger.info("rag_retrieval_matches", {
+          iteration,
+          query: currentQuery,
+          matchesFound: matches.length,
+          matches: matches.map((m) => ({
+            itemId: m.itemId,
+            title: m.title,
+            score: m.score,
+            chunkId: m.chunkId,
+            snippet: m.text.slice(0, 100),
+          })),
+        });
+
         if (matches.length === 0) {
+          logger.warn("rag_retrieval_empty", {
+            iteration,
+            query: currentQuery,
+          });
+
           if (iteration < this.maxIterations) {
+            logger.info("rag_rewrite_query_start", {
+              iteration,
+              attempt: iteration,
+              pastQueries,
+            });
             currentQuery = await this.llmClient.rewriteQuery(
               trimmed,
               iteration,
               pastQueries,
             );
             pastQueries.push(currentQuery);
+            logger.info("rag_rewrite_query_result", {
+              iteration,
+              newQuery: currentQuery,
+            });
             continue;
           }
 
           if (bestSources.length === 0) {
+            const fallbackMessage = getRandomFallbackMessage();
+            logger.info("rag_fallback_denial_selected", {
+              iteration,
+              reason: "Zero vector matches across all iterations",
+              fallbackMessage,
+            });
             return {
-              answer: FALLBACK_MESSAGE,
+              answer: fallbackMessage,
               sources: [],
               iterations: iteration,
               reformulatedQueries: pastQueries.slice(1),
+              isFallback: true,
             };
           }
         }
@@ -177,18 +226,38 @@ export class RagService {
           )
           .join("\n\n---\n\n");
 
+        logger.info("rag_grade_retrieval_start", {
+          iteration,
+          question: trimmed,
+          contextLength: contextText.length,
+        });
+
         const isRelevant =
           matches.length > 0
             ? await this.llmClient.gradeRetrieval(trimmed, contextText)
             : false;
 
+        logger.info("rag_grade_retrieval_result", {
+          iteration,
+          isRelevant,
+        });
+
         if (!isRelevant && iteration < this.maxIterations) {
+          logger.info("rag_rewrite_query_start", {
+            iteration,
+            reason: "Retrieved context deemed not relevant by LLM evaluator",
+            pastQueries,
+          });
           currentQuery = await this.llmClient.rewriteQuery(
             trimmed,
             iteration,
             pastQueries,
           );
           pastQueries.push(currentQuery);
+          logger.info("rag_rewrite_query_result", {
+            iteration,
+            newQuery: currentQuery,
+          });
           continue;
         }
 
@@ -201,27 +270,54 @@ export class RagService {
               match.text.length > 250
                 ? `${match.text.slice(0, 250)}...`
                 : match.text,
+            score: match.score,
           }));
 
           const userPrompt = formatRagUserPrompt(trimmed, contextText);
+          logger.info("rag_generate_answer_start", {
+            iteration,
+            sourcesCount: currentSources.length,
+          });
+
           const candidateAnswer = await this.llmClient.generateAnswer(
             RAG_SYSTEM_PROMPT,
             userPrompt,
           );
 
-          if (candidateAnswer && candidateAnswer !== FALLBACK_MESSAGE) {
+          logger.info("rag_generate_answer_result", {
+            iteration,
+            answerLength: candidateAnswer.length,
+            preview: candidateAnswer.slice(0, 120),
+          });
+
+          if (
+            candidateAnswer &&
+            !FALLBACK_MESSAGES.some((msg) => candidateAnswer.includes(msg))
+          ) {
+            logger.info("rag_grade_groundedness_start", { iteration });
             const isGrounded = await this.llmClient.gradeAnswer(
               trimmed,
               candidateAnswer,
               contextText,
             );
+            logger.info("rag_grade_groundedness_result", {
+              iteration,
+              isGrounded,
+            });
 
             if (isGrounded) {
+              logger.info("rag_pipeline_success", {
+                iteration,
+                answerLength: candidateAnswer.length,
+                sourcesCount: currentSources.length,
+                reformulations: pastQueries.slice(1),
+              });
               return {
                 answer: candidateAnswer,
                 sources: currentSources,
                 iterations: iteration,
                 reformulatedQueries: pastQueries.slice(1),
+                isFallback: false,
               };
             }
 
@@ -233,20 +329,38 @@ export class RagService {
         }
 
         if (iteration < this.maxIterations) {
+          logger.info("rag_rewrite_query_start", {
+            iteration,
+            reason: "Grounding check failed or candidate insufficient",
+            pastQueries,
+          });
           currentQuery = await this.llmClient.rewriteQuery(
             trimmed,
             iteration,
             pastQueries,
           );
           pastQueries.push(currentQuery);
+          logger.info("rag_rewrite_query_result", {
+            iteration,
+            newQuery: currentQuery,
+          });
         }
       }
 
+      const finalFallback = bestAnswer || getRandomFallbackMessage();
+      logger.warn("rag_pipeline_fallback", {
+        iterations: this.maxIterations,
+        hasBestAnswer: Boolean(bestAnswer),
+        finalAnswerPreview: finalFallback.slice(0, 100),
+        sourcesCount: bestSources.length,
+      });
+
       return {
-        answer: bestAnswer || FALLBACK_MESSAGE,
+        answer: finalFallback,
         sources: bestSources,
         iterations: this.maxIterations,
         reformulatedQueries: pastQueries.slice(1),
+        isFallback: !bestAnswer || bestSources.length === 0,
       };
     } catch (error: unknown) {
       if (error instanceof AppError) throw error;
@@ -254,6 +368,7 @@ export class RagService {
         error instanceof Error
           ? error.message
           : "Self-RAG loop execution failed.";
+      logger.error("rag_pipeline_error", { error: message });
       throw new AppError(
         502,
         "UPSTREAM_ERROR",

@@ -25,7 +25,7 @@ describe("Query Routes Integration (POST /query)", () => {
       }
 
       return {
-        answer: "I don't have enough information in the saved knowledge inbox to answer this question.",
+        answer: "No data related to this query is available in your saved knowledge.",
         sources: [],
         iterations: 1,
         reformulatedQueries: [],
@@ -51,7 +51,7 @@ describe("Query Routes Integration (POST /query)", () => {
     const res = await request(app).post("/query").send({ question: "Tell me about quantum gravity." });
 
     assert.equal(res.status, 200);
-    assert.match(res.body.answer, /don't have enough information/i);
+    assert.ok(/saved knowledge|no data|couldn't find|no information/i.test(res.body.answer));
     assert.deepEqual(res.body.sources, []);
   });
 

@@ -59,6 +59,7 @@ export interface SourceCitation {
   title: string;
   url: string | null;
   snippet: string;
+  score?: number;
 }
 
 export interface RagResponse {
@@ -66,13 +67,22 @@ export interface RagResponse {
   sources: SourceCitation[];
   iterations: number;
   reformulatedQueries: string[];
+  isFallback?: boolean;
 }
 
 export interface ILlmClient {
   generateAnswer(systemPrompt: string, userPrompt: string): Promise<string>;
   gradeRetrieval(question: string, context: string): Promise<boolean>;
-  rewriteQuery(originalQuestion: string, attempt: number, pastQueries: string[]): Promise<string>;
-  gradeAnswer(question: string, answer: string, context: string): Promise<boolean>;
+  rewriteQuery(
+    originalQuestion: string,
+    attempt: number,
+    pastQueries: string[],
+  ): Promise<string>;
+  gradeAnswer(
+    question: string,
+    answer: string,
+    context: string,
+  ): Promise<boolean>;
 }
 
 export interface IEmbeddingService {
