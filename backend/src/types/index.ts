@@ -20,9 +20,19 @@ export interface CreateItemInput {
   sourceUrl?: string | null;
 }
 
+export interface SparseVector {
+  indices: number[];
+  values: number[];
+}
+
+export interface ISparseEncoderService {
+  encodeText(text: string): SparseVector;
+}
+
 export interface PineconeChunkRecord {
   id: string;
   values: number[];
+  sparseValues?: SparseVector;
   metadata: {
     itemId: string;
     chunkIndex: number;
@@ -49,7 +59,11 @@ export interface PineconeMatch {
 export interface IPineconeService {
   upsertChunks(records: PineconeChunkRecord[]): Promise<void>;
   deleteByItemId(itemId: string): Promise<void>;
-  querySimilar(vector: number[], topK?: number): Promise<PineconeMatch[]>;
+  querySimilar(
+    vector: number[],
+    topK?: number,
+    sparseVector?: SparseVector,
+  ): Promise<PineconeMatch[]>;
 }
 
 export type AiClientConfig = ClientOptions;
@@ -116,6 +130,7 @@ export interface SearchResult {
 export interface SearchOptions {
   topK?: number;
   minScore?: number;
+  alpha?: number;
 }
 
 export interface ISearchService {

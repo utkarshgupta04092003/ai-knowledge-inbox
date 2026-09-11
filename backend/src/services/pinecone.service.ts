@@ -1,23 +1,25 @@
 import { getPineconeIndex } from "../config/pinecone.js";
 import type {
+  IPineconeService,
   PineconeChunkRecord,
   PineconeMatch,
-  IPineconeService,
+  SparseVector,
 } from "../types/index.js";
 
 export {
+  ensurePineconeIndex,
   getPineconeClient,
   getPineconeIndex,
-  ensurePineconeIndex,
-  verifyPineconeConnection,
   PINECONE_DIMENSION,
   PINECONE_METRIC,
+  verifyPineconeConnection,
 } from "../config/pinecone.js";
 
 export type {
+  IPineconeService,
   PineconeChunkRecord,
   PineconeMatch,
-  IPineconeService,
+  SparseVector,
 } from "../types/index.js";
 
 const BATCH_SIZE = 100;
@@ -40,7 +42,17 @@ export class PineconeService implements IPineconeService {
     const index = this.getIndex();
     for (let i = 0; i < records.length; i += BATCH_SIZE) {
       const batch = records.slice(i, i + BATCH_SIZE);
-      await index.upsert({ records: batch });
+      await index.upsert({
+        records: batch.map((record) => ({
+          id: record.id,
+          values: record.values,
+          sparseValues:
+            record.sparseValues && record.sparseValues.indices.length > 0
+              ? record.sparseValues
+              : undefined,
+          metadata: record.metadata,
+        })),
+      });
     }
   }
 
@@ -55,13 +67,25 @@ export class PineconeService implements IPineconeService {
   async querySimilar(
     vector: number[],
     topK: number = 5,
+    sparseVector?: SparseVector,
   ): Promise<PineconeMatch[]> {
     const index = this.getIndex();
-    const queryResponse = await index.query({
+    const queryParams: {
+      vector: number[];
+      topK: number;
+      includeMetadata: boolean;
+      sparseVector?: SparseVector;
+    } = {
       vector,
       topK,
       includeMetadata: true,
-    });
+    };
+
+    if (sparseVector && sparseVector.indices.length > 0) {
+      queryParams.sparseVector = sparseVector;
+    }
+
+    const queryResponse = await index.query(queryParams);
 
     const matches: PineconeMatch[] = [];
     for (const match of queryResponse.matches ?? []) {

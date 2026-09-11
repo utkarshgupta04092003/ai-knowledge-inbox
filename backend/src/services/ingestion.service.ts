@@ -4,6 +4,7 @@ import type {
   IIngestionService,
   IngestResult,
   IPineconeService,
+  ISparseEncoderService,
   IUrlFetchService,
   PineconeChunkRecord,
 } from "../types/index.js";
@@ -12,6 +13,7 @@ import { ChunkingService } from "./chunking.service.js";
 import { EmbeddingService } from "./embedding.service.js";
 import { ItemService } from "./item.service.js";
 import { PineconeService } from "./pinecone.service.js";
+import { SparseEncoderService } from "./sparse-encoder.service.js";
 
 export type { IngestResult } from "../types/index.js";
 
@@ -22,6 +24,7 @@ export class IngestionService implements IIngestionService {
     private readonly chunkingService: ChunkingService = new ChunkingService(),
     private readonly embeddingService: IEmbeddingService = new EmbeddingService(),
     private readonly pineconeService: IPineconeService = new PineconeService(),
+    private readonly sparseEncoderService: ISparseEncoderService = new SparseEncoderService(),
   ) {}
 
   async ingest(body: unknown): Promise<IngestResult> {
@@ -57,6 +60,7 @@ export class IngestionService implements IIngestionService {
       const records: PineconeChunkRecord[] = chunks.map((chunk, index) => ({
         id: `${item.id}#${chunk.chunkIndex}`,
         values: embeddings[index],
+        sparseValues: this.sparseEncoderService.encodeText(chunk.text),
         metadata: {
           itemId: item.id,
           chunkIndex: chunk.chunkIndex,

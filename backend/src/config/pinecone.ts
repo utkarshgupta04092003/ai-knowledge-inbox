@@ -2,7 +2,7 @@ import { Pinecone } from "@pinecone-database/pinecone";
 import { env } from "./env.js";
 
 export const PINECONE_DIMENSION = 1536;
-export const PINECONE_METRIC = "cosine";
+export const PINECONE_METRIC = "dotproduct";
 
 let pineconeClient: Pinecone | null = null;
 

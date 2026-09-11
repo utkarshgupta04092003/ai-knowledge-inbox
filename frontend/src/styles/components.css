@@ -785,10 +785,38 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
   font-size: 12px;
+}
+
+.open-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.open-detail-link svg {
+  flex-shrink: 0;
+  color: var(--primary);
+  transition: transform var(--transition-fast);
+}
+
+.library-card:hover .open-detail-link {
+  color: var(--primary);
+}
+
+.library-card:hover .open-detail-link svg {
+  transform: translateX(3px);
 }
 
 .item-detail-grid {
@@ -1305,6 +1333,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .citation-link:hover {

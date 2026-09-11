@@ -1,8 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { SearchService } from "./search.service.js";
+import { describe, it } from "node:test";
 import { IEmbeddingService } from "./embedding.service.js";
 import { IPineconeService, PineconeMatch } from "./pinecone.service.js";
+import { SearchService } from "./search.service.js";
 
 describe("SearchService", () => {
   const mockEmbeddingService: IEmbeddingService = {
@@ -71,5 +71,36 @@ describe("SearchService", () => {
     assert.equal(results[0].score, 0.85);
     assert.equal(results[0].title, "Prisma Notes");
     assert.equal(results[0].text, "Prisma provides type-safe queries.");
+  });
+
+  it("passes scaled dense and sparse vectors to Pinecone when alpha is configured", async () => {
+    let capturedVector: number[] = [];
+    let capturedSparse: { indices: number[]; values: number[] } | undefined;
+
+    const mockPinecone: IPineconeService = {
+      async upsertChunks(): Promise<void> {},
+      async deleteByItemId(): Promise<void> {},
+      async querySimilar(
+        vector,
+        _topK,
+        sparseVector,
+      ): Promise<PineconeMatch[]> {
+        capturedVector = vector;
+        capturedSparse = sparseVector;
+        return [];
+      },
+    };
+
+    const searchService = new SearchService(mockEmbeddingService, mockPinecone);
+    await searchService.search("vector indexing", { alpha: 0.6 });
+
+    // Dense vector scaled by alpha 0.6: [0.1 * 0.6, 0.2 * 0.6] = [0.06, 0.12]
+    assert.ok(Math.abs(capturedVector[0] - 0.06) < 0.001);
+    assert.ok(Math.abs(capturedVector[1] - 0.12) < 0.001);
+
+    // Sparse vector should be present and scaled by (1 - 0.6) = 0.4
+    assert.ok(capturedSparse);
+    assert.ok(capturedSparse.indices.length > 0);
+    assert.ok(capturedSparse.values.every((v) => v > 0 && v <= 0.4));
   });
 });
