@@ -1,5 +1,13 @@
-import { ChevronDown, FileCode2, Package, Search, Sun } from "lucide-react";
+import {
+  ChevronDown,
+  FileCode2,
+  Moon,
+  Package,
+  Search,
+  Sun,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTheme } from "../hooks/useTheme";
 
 interface TopBarProps {
   onSearch?: (query: string) => void;
@@ -8,6 +16,7 @@ interface TopBarProps {
 
 export function TopBar({ onSearch, onNavigate }: TopBarProps) {
   const [searchValue, setSearchValue] = useState("");
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,8 +84,16 @@ export function TopBar({ onSearch, onNavigate }: TopBarProps) {
           <FileCode2 size={16} />
         </a>
 
-        <button type="button" className="top-icon-btn" title="Theme">
-          <Sun size={16} />
+        <button
+          type="button"
+          className="top-icon-btn"
+          title={
+            theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+          }
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
         <div className="user-profile-pill">

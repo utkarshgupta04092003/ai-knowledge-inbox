@@ -276,7 +276,7 @@
   height: 26px;
   border-radius: var(--radius-full);
   background: var(--primary);
-  color: #0E0D0B;
+  color: var(--primary-contrast);
   font-size: 12px;
   font-weight: 700;
 }
@@ -489,3 +489,24 @@
     padding: 16px 12px 76px 12px;
   }
 }
+
+/* Light Theme Overrides for Shell */
+html[data-theme="light"] .app-layout {
+  background: radial-gradient(circle at 85% 0%, rgba(184, 99, 52, 0.05), transparent 35%), var(--background);
+}
+
+html[data-theme="light"] .app-sidebar {
+  background: #F5F1EB;
+  border-right: 1px solid var(--border);
+}
+
+html[data-theme="light"] .top-bar {
+  background: rgba(251, 249, 245, 0.90);
+  border-bottom: 1px solid var(--border);
+}
+
+html[data-theme="light"] .sidebar-callout-card {
+  background: #FFFFFF;
+  border-color: var(--border);
+}
+
