@@ -1,4 +1,5 @@
 import { Home, Plus, BookOpen, MessageSquare, Settings, HelpCircle, Package } from "lucide-react";
+import { apiUrl } from "../services/api";
 import type { Route } from "../router";
 
 interface SidebarProps {
@@ -71,20 +72,23 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="sidebar-bottom">
-        <button
-          type="button"
-          className="sidebar-nav-btn secondary-btn"
-          onClick={() => onNavigate("/api-docs/")}
-        >
-          <Settings size={18} />
-          <span>Settings</span>
-        </button>
-
         <a
-          href="/api-docs/"
+          href={apiUrl("/api-docs/")}
           target="_blank"
           rel="noreferrer noopener"
           className="sidebar-nav-btn secondary-btn"
+          title="Open API Documentation & Settings"
+        >
+          <Settings size={18} />
+          <span>Settings</span>
+        </a>
+
+        <a
+          href={apiUrl("/api-docs/")}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="sidebar-nav-btn secondary-btn"
+          title="Open API Documentation & Help"
         >
           <HelpCircle size={18} />
           <span>Help</span>

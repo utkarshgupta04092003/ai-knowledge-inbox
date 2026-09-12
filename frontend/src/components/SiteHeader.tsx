@@ -7,6 +7,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { HealthStatus } from "../hooks/useHealthStatus";
+import { apiUrl } from "../services/api";
 
 export type NavTab = "query" | "feed" | "add";
 
@@ -76,7 +77,7 @@ export function SiteHeader({
 
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <a
-          href="/api-docs/"
+          href={apiUrl("/api-docs/")}
           target="_blank"
           rel="noreferrer noopener"
           className="nav-link-ext"

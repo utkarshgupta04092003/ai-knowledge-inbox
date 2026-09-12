@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
+import { apiUrl } from "../services/api";
 
 interface TopBarProps {
   onSearch?: (query: string) => void;
@@ -75,7 +76,7 @@ export function TopBar({ onSearch, onNavigate }: TopBarProps) {
 
       <div className="top-bar-right">
         <a
-          href="/api-docs/"
+          href={apiUrl("/api-docs/")}
           target="_blank"
           rel="noreferrer noopener"
           className="top-icon-btn"
