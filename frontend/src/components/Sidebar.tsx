@@ -1,4 +1,4 @@
-import { Home, Plus, BookOpen, MessageSquare, Settings, HelpCircle, Package } from "lucide-react";
+import { Home, Plus, BookOpen, MessageSquare, FileCode2, Package } from "lucide-react";
 import { apiUrl } from "../services/api";
 import type { Route } from "../router";
 
@@ -77,21 +77,10 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
           target="_blank"
           rel="noreferrer noopener"
           className="sidebar-nav-btn secondary-btn"
-          title="Open API Documentation & Settings"
+          title="Open Swagger API Documentation"
         >
-          <Settings size={18} />
-          <span>Settings</span>
-        </a>
-
-        <a
-          href={apiUrl("/api-docs/")}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="sidebar-nav-btn secondary-btn"
-          title="Open API Documentation & Help"
-        >
-          <HelpCircle size={18} />
-          <span>Help</span>
+          <FileCode2 size={18} />
+          <span>API Docs</span>
         </a>
 
         {/* Callout Card */}

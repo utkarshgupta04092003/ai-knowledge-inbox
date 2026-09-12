@@ -185,6 +185,8 @@
   border-radius: var(--radius-md);
   padding: 8px 14px;
   width: min(440px, 100%);
+  min-width: 0;
+  overflow: hidden;
   transition: all var(--transition-fast);
 }
 
@@ -200,11 +202,15 @@
 
 .top-search-input {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   outline: none !important;
   color: var(--text-primary);
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-search-input:focus,
@@ -215,6 +221,9 @@
 
 .top-search-input::placeholder {
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-search-shortcut {
@@ -464,6 +473,14 @@
     flex: 1;
     min-width: 0;
     padding: 6px 10px;
+    overflow: hidden;
+  }
+
+  .top-search-input {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .top-search-shortcut {

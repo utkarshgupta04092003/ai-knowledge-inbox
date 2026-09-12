@@ -17,7 +17,17 @@ interface TopBarProps {
 
 export function TopBar({ onSearch, onNavigate }: TopBarProps) {
   const [searchValue, setSearchValue] = useState("");
+  const [placeholder, setPlaceholder] = useState("Search your knowledge...");
   const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const updatePlaceholder = () => {
+      setPlaceholder(window.innerWidth <= 640 ? "Search..." : "Search your knowledge...");
+    };
+    updatePlaceholder();
+    window.addEventListener("resize", updatePlaceholder);
+    return () => window.removeEventListener("resize", updatePlaceholder);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -64,7 +74,8 @@ export function TopBar({ onSearch, onNavigate }: TopBarProps) {
           id="global-search-input"
           type="text"
           className="top-search-input"
-          placeholder="Search your knowledge..."
+          placeholder={placeholder}
+          aria-label="Search your knowledge"
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
         />
